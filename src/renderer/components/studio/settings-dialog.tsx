@@ -1,0 +1,907 @@
+import { useEffect, useState, type ReactNode } from "react"
+import { useTheme } from "next-themes"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { cn } from "@/lib/utils"
+import {
+  ArrowUpCircle,
+  Columns2,
+  ExternalLink,
+  Palette,
+  FileArchive,
+  FolderOpen,
+  Puzzle,
+  RefreshCw,
+  Trash2,
+  type LucideIcon,
+} from "lucide-react"
+
+import {
+  ACCENT_PALETTES,
+  isDensity,
+  isFontSize,
+  isMonoFont,
+  isSansFont,
+  MONO_FONT_LABELS,
+  monoFontFamily,
+  PALETTE_LABELS,
+  SANS_FONT_LABELS,
+  sansFontFamily,
+} from "@/lib/appearance"
+import { useAppBackground } from "@/lib/app-background"
+import { FEEDBACK_REPO } from "@/lib/feedback"
+import type { ClaudeVersions } from "@shared/api"
+import { isOn, usePlugins, type PluginStatus } from "@/lib/plugins/store"
+import { useSettings } from "@/lib/settings"
+import {
+  isLanguageChoice,
+  LOCALE_NAMES,
+  LOCALES,
+  useT,
+  type MessageKey,
+} from "@/lib/i18n"
+import { installLabel, pendingUpdate, useUpdates } from "@/lib/updates"
+import { IconButton } from "./icon-button"
+import { OfficialBadge } from "./official-badge"
+import { UpdateProgressBar } from "./update-progress"
+
+/**
+ * The studio's preferences — **Settings…** in the application menu, ⌘,.
+ *
+ * A dialog rather than a panel with a tab of its own: what is here is about
+ * the workbench itself rather than about anything in the workspace, and a
+ * preference read once and closed does not want a place in the strip beside
+ * the files it is being read about. It is also the only honest home for a
+ * setting whose effect *is* the strip — a tab is a poor place to be holding
+ * the switch that moves the tabs.
+ *
+ * Laid out the way every settings window of this shape is: sections down the
+ * left, one section's rows on the right, each row a name and a sentence with
+ * its control at the far end. That is not decoration — it is what keeps the
+ * dialog the same size as it grows. A single scrolling column is fine for the
+ * three settings there are today and stops being fine at ten, and a list of
+ * sections is also the only thing that says what *kinds* of preference exist
+ * without reading all of them.
+ *
+ * There is no Save: a preference applies as it is picked, which is what makes
+ * the studio behind the dialog its own preview. Everything written here goes
+ * through `lib/settings.ts` and lands in the workspace's own settings, so it
+ * survives a relaunch the way the strip's arrangement does.
+ */
+export function SettingsDialog({ onClose }: { onClose: () => void }) {
+  const t = useT()
+  const [section, setSection] = useState<SectionId>("appearance")
+
+  const current = SECTIONS.find((candidate) => candidate.id === section)!
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+    >
+      <DialogContent className="grid h-[34rem] max-h-[85vh] w-full grid-cols-[12rem_1fr] gap-0 overflow-hidden p-0 sm:max-w-3xl">
+        <nav
+          aria-label={t("settings.sectionsLabel")}
+          className="flex min-h-0 flex-col gap-0.5 overflow-y-auto border-r bg-muted/30 p-2"
+        >
+          <p className="px-2 pt-1 pb-2 text-[0.7rem] font-medium tracking-wide text-muted-foreground uppercase">
+            {t("settings.options")}
+          </p>
+          {SECTIONS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              // `aria-current` rather than `role="tab"`: these are pages of a
+              // dialog, not tabs of a panel, and the panel beside them is not
+              // a tabpanel anyone should be able to arrow through.
+              aria-current={id === section ? "page" : undefined}
+              onClick={() => setSection(id)}
+              className={cn(
+                "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                id === section
+                  ? "bg-accent font-medium text-accent-foreground"
+                  : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              )}
+            >
+              <Icon className="size-4 shrink-0" />
+              <span className="truncate">{t(label)}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="flex min-h-0 min-w-0 flex-col">
+          {/* `pr-12` clears the close button, which the dialog draws in the
+              corner over whatever is there. */}
+          <header className="shrink-0 border-b px-5 py-4 pr-12">
+            <DialogTitle>{t(current.label)}</DialogTitle>
+            <DialogDescription className="mt-1 text-xs">
+              {t(current.blurb)}
+            </DialogDescription>
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            {section === "appearance" ? (
+              <AppearanceSection onReplayTour={onClose} />
+            ) : section === "tabs" ? (
+              <TabsSection />
+            ) : section === "plugins" ? (
+              <PluginsSection />
+            ) : (
+              <UpdatesSection />
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+type SectionId = "appearance" | "tabs" | "plugins" | "updates"
+
+/** The sections, in the order they are listed. Each one is a heading, a line
+ * saying what it covers, and the rows below — kept together so adding a
+ * section is one entry rather than three edits. */
+const SECTIONS: {
+  id: SectionId
+  label: MessageKey
+  blurb: MessageKey
+  icon: LucideIcon
+}[] = [
+  {
+    id: "appearance",
+    label: "settings.sections.appearance",
+    blurb: "settings.sections.appearanceBlurb",
+    icon: Palette,
+  },
+  {
+    id: "tabs",
+    label: "settings.sections.tabs",
+    blurb: "settings.sections.tabsBlurb",
+    icon: Columns2,
+  },
+  {
+    id: "plugins",
+    label: "settings.sections.plugins",
+    blurb: "settings.sections.pluginsBlurb",
+    icon: Puzzle,
+  },
+  {
+    id: "updates",
+    label: "settings.sections.updates",
+    blurb: "settings.sections.updatesBlurb",
+    icon: ArrowUpCircle,
+  },
+]
+
+/**
+ * How the studio looks. Every row here applies as it is picked — the window
+ * behind the dialog is the preview — through `applyAppearance`, which the
+ * workbench subscribes to the settings store with; nothing in this section
+ * touches the document itself.
+ */
+function AppearanceSection({ onReplayTour }: { onReplayTour: () => void }) {
+  // `theme` is the choice, `resolvedTheme` what it came out as — the choice is
+  // what a settings row is asking about, so `system` stays visible as `system`
+  // rather than as whichever of the two it happens to be right now.
+  const t = useT()
+  const { theme, setTheme } = useTheme()
+  const language = useSettings((state) => state.language)
+  const setLanguage = useSettings((state) => state.setLanguage)
+  const palette = useSettings((state) => state.palette)
+  const setPalette = useSettings((state) => state.setPalette)
+  const fontSans = useSettings((state) => state.fontSans)
+  const setFontSans = useSettings((state) => state.setFontSans)
+  const fontMono = useSettings((state) => state.fontMono)
+  const setFontMono = useSettings((state) => state.setFontMono)
+  const fontSize = useSettings((state) => state.fontSize)
+  const setFontSize = useSettings((state) => state.setFontSize)
+  const density = useSettings((state) => state.density)
+  const setDensity = useSettings((state) => state.setDensity)
+  const setOnboarded = useSettings((state) => state.setOnboarded)
+  const backgroundImage = useAppBackground((state) => state.image)
+  const chooseBackground = useAppBackground((state) => state.choose)
+  const clearBackground = useAppBackground((state) => state.clear)
+  const [backgroundError, setBackgroundError] = useState<string | null>(null)
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <Row
+          title={t("settings.appearance.language")}
+          description={t("settings.appearance.languageDescription")}
+        >
+          <Segmented
+            value={language}
+            options={[
+              {
+                value: "system",
+                label: t("settings.appearance.languageSystem"),
+              },
+              ...LOCALES.map((locale) => ({
+                value: locale,
+                label: LOCALE_NAMES[locale],
+              })),
+            ]}
+            onPick={(value) => {
+              if (isLanguageChoice(value)) setLanguage(value)
+            }}
+          />
+        </Row>
+        <Row
+          title={t("settings.appearance.theme")}
+          description={t("settings.appearance.themeDescription")}
+        >
+          <Segmented
+            value={theme ?? "system"}
+            options={[
+              {
+                value: "system",
+                label: t("settings.appearance.themeSystem"),
+              },
+              { value: "light", label: t("settings.appearance.themeLight") },
+              { value: "dark", label: t("settings.appearance.themeDark") },
+            ]}
+            onPick={setTheme}
+          />
+        </Row>
+        <Row
+          title={t("settings.appearance.accent")}
+          description={t("settings.appearance.accentDescription")}
+        >
+          <div role="radiogroup" className="flex items-center gap-1.5">
+            {ACCENT_PALETTES.map((candidate) => (
+              <button
+                key={candidate}
+                type="button"
+                role="radio"
+                aria-checked={candidate === palette}
+                aria-label={PALETTE_LABELS[candidate]}
+                title={PALETTE_LABELS[candidate]}
+                // The swatch is the palette's own `--primary`: the same
+                // `[data-palette]` rule the window reads, on a span instead of
+                // `<html>`, so there is no second table of colours to keep in
+                // step. It is the light accent in both modes, since the dark
+                // rule wants `.dark` on the same element.
+                data-palette={candidate}
+                onClick={() => setPalette(candidate)}
+                className={cn(
+                  "flex size-6 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  candidate === palette
+                    ? "ring-2 ring-foreground ring-offset-2 ring-offset-popover"
+                    : "ring-1 ring-border"
+                )}
+              >
+                <span className="size-4 rounded-full bg-primary" />
+              </button>
+            ))}
+          </div>
+        </Row>
+      </Card>
+
+      <Card>
+        <Row
+          title={t("settings.appearance.font")}
+          description={t("settings.appearance.fontDescription")}
+        >
+          <FontPicker
+            value={fontSans}
+            labels={SANS_FONT_LABELS}
+            onPick={(value) => {
+              if (isSansFont(value)) setFontSans(value)
+            }}
+          />
+        </Row>
+        <Row
+          title={t("settings.appearance.monoFont")}
+          description={t("settings.appearance.monoFontDescription")}
+        >
+          <FontPicker
+            value={fontMono}
+            labels={MONO_FONT_LABELS}
+            onPick={(value) => {
+              if (isMonoFont(value)) setFontMono(value)
+            }}
+          />
+        </Row>
+        <Row
+          title={t("settings.appearance.fontSize")}
+          description={t("settings.appearance.fontSizeDescription")}
+        >
+          <Segmented
+            value={fontSize}
+            options={[
+              { value: "small", label: t("settings.appearance.sizeSmall") },
+              {
+                value: "default",
+                label: t("settings.appearance.sizeDefault"),
+              },
+              { value: "large", label: t("settings.appearance.sizeLarge") },
+            ]}
+            onPick={(value) => {
+              if (isFontSize(value)) setFontSize(value)
+            }}
+          />
+        </Row>
+        <Row
+          title={t("settings.appearance.density")}
+          description={t("settings.appearance.densityDescription")}
+        >
+          <Segmented
+            value={density}
+            options={[
+              {
+                value: "compact",
+                label: t("settings.appearance.densityCompact"),
+              },
+              {
+                value: "comfortable",
+                label: t("settings.appearance.densityComfortable"),
+              },
+              {
+                value: "spacious",
+                label: t("settings.appearance.densitySpacious"),
+              },
+            ]}
+            onPick={(value) => {
+              if (isDensity(value)) setDensity(value)
+            }}
+          />
+        </Row>
+      </Card>
+
+      <Card>
+        <Row
+          title={t("settings.appearance.background")}
+          description={
+            backgroundError ? (
+              <span className="text-destructive">{backgroundError}</span>
+            ) : (
+              t("settings.appearance.backgroundDescription")
+            )
+          }
+        >
+          <div className="flex items-center gap-1.5">
+            {backgroundImage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void clearBackground()}
+              >
+                {t("common.remove")}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setBackgroundError(null)
+                chooseBackground().catch((error: unknown) =>
+                  setBackgroundError(messageOfError(error))
+                )
+              }}
+            >
+              {backgroundImage
+                ? t("settings.appearance.changePicture")
+                : t("settings.appearance.choosePicture")}
+            </Button>
+          </div>
+        </Row>
+      </Card>
+
+      <Card>
+        <Row
+          title={t("settings.appearance.tour")}
+          description={t("settings.appearance.tourDescription")}
+        >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              // Unset first, then close: the tour is mounted by the workbench
+              // off this flag, and it has to land over a window with no
+              // dialog still holding focus.
+              setOnboarded(false)
+              onReplayTour()
+            }}
+          >
+            {t("settings.appearance.replayTour")}
+          </Button>
+        </Row>
+      </Card>
+    </div>
+  )
+}
+
+/** One of a short list of typefaces, each drawn in itself so the list is its
+ * own preview — and so a family that is not installed is visibly the fallback
+ * before it is picked. */
+function FontPicker<Value extends string>({
+  value,
+  labels,
+  onPick,
+}: {
+  value: Value
+  labels: Record<Value, string>
+  onPick: (value: string) => void
+}) {
+  const values = Object.keys(labels) as Value[]
+  return (
+    <Select
+      value={value}
+      items={labels}
+      onValueChange={(next) => {
+        if (typeof next === "string") onPick(next)
+      }}
+    >
+      <SelectTrigger size="sm" className="w-52 text-xs">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent align="end">
+        {values.map((candidate) => (
+          <SelectItem
+            key={candidate}
+            value={candidate}
+            className="text-xs"
+            style={{ fontFamily: previewFamily(candidate) }}
+          >
+            {labels[candidate]}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+/** The stack a row is drawn in: a key is a sans or a mono name, never both. */
+function previewFamily(value: string): string {
+  if (isMonoFont(value) && value !== "system") return monoFontFamily(value)
+  if (isSansFont(value) && value !== "system") return sansFontFamily(value)
+  return "inherit"
+}
+
+function TabsSection() {
+  const allProjectTabs = useSettings((state) => state.allProjectTabs)
+  const setAllProjectTabs = useSettings((state) => state.setAllProjectTabs)
+  const gitBlame = useSettings((state) => state.gitBlame)
+  const setGitBlame = useSettings((state) => state.setGitBlame)
+  const t = useT()
+
+  return (
+    <Card>
+      <Row
+        title={t("settings.tabs.allProjectTabs")}
+        description={t("settings.tabs.allProjectTabsDescription")}
+      >
+        <Switch checked={allProjectTabs} onCheckedChange={setAllProjectTabs} />
+      </Row>
+      <Row
+        title={t("settings.tabs.gitBlame")}
+        description={t("settings.tabs.gitBlameDescription")}
+      >
+        <Switch checked={gitBlame} onCheckedChange={setGitBlame} />
+      </Row>
+    </Card>
+  )
+}
+
+/**
+ * Off for now: the install buttons are hidden rather than deleted, so the
+ * install path in the store and main still compiles and tests the same.
+ */
+const SHOW_PLUGIN_INSTALL = false
+
+/**
+ * The plugins: the built-in ones, then the ones installed from a folder or a
+ * `.zip` — the way in for a plugin made outside the app until there is a
+ * marketplace, which will install through the same `installPlugin`.
+ *
+ * The warning is standing rather than a confirm on the first switch: it is
+ * true of every plugin every time, and a dialog clicked through once says
+ * nothing to whoever switches on the next one. An installed plugin arrives
+ * **off** for the same reason — picking a folder is not the decision to run it.
+ */
+function PluginsSection() {
+  const plugins = usePlugins((state) => state.plugins)
+  const enabled = usePlugins((state) => state.enabled)
+  const disabled = usePlugins((state) => state.disabled)
+  const status = usePlugins((state) => state.status)
+  const refresh = usePlugins((state) => state.refresh)
+  const setEnabled = usePlugins((state) => state.setEnabled)
+  const reload = usePlugins((state) => state.reload)
+  const install = usePlugins((state) => state.install)
+  const remove = usePlugins((state) => state.remove)
+  const t = useT()
+  /** What the last install said: which plugin, or why not. */
+  const [outcome, setOutcome] = useState<{
+    text: string
+    failed: boolean
+  } | null>(null)
+  const [installing, setInstalling] = useState(false)
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const installFrom = async (source: "folder" | "zip") => {
+    setInstalling(true)
+    try {
+      const installed = await install(source)
+      if (installed) {
+        setOutcome({
+          text: installed.replaced
+            ? t("settings.plugins.updated", { name: installed.name })
+            : t("settings.plugins.installed", { name: installed.name }),
+          failed: false,
+        })
+      }
+    } catch (error) {
+      setOutcome({ text: messageOfError(error), failed: true })
+    } finally {
+      setInstalling(false)
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed">
+        {t("settings.plugins.warning")}
+      </p>
+
+      {SHOW_PLUGIN_INSTALL && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={installing}
+              onClick={() => void installFrom("folder")}
+            >
+              <FolderOpen className="size-3.5" />
+              {t("settings.plugins.installFolder")}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={installing}
+              onClick={() => void installFrom("zip")}
+            >
+              <FileArchive className="size-3.5" />
+              {t("settings.plugins.installZip")}
+            </Button>
+          </div>
+          {/* `polite` so a screen reader hears how the install went, which is
+            otherwise a dialog closing and nothing else. */}
+          <p
+            aria-live="polite"
+            className={cn(
+              "text-xs",
+              outcome?.failed ? "text-destructive" : "text-muted-foreground"
+            )}
+          >
+            {outcome?.text ?? t("settings.plugins.installHint")}
+          </p>
+        </div>
+      )}
+
+      {plugins.length === 0 ? null : (
+        <Card>
+          {plugins.map((plugin) => {
+            const on = isOn(plugin, { enabled, disabled })
+            const state = status[plugin.id]
+            const problem = plugin.error ?? failureOf(state)
+            return (
+              <Row
+                key={plugin.id}
+                title={
+                  <span className="inline-flex items-center gap-1.5">
+                    {plugin.manifest
+                      ? `${plugin.manifest.name} ${plugin.manifest.version}`
+                      : plugin.id}
+                    {plugin.bundled && <OfficialBadge />}
+                  </span>
+                }
+                description={
+                  problem ? (
+                    <span className="text-destructive">{problem}</span>
+                  ) : (
+                    (plugin.manifest?.description ?? plugin.id)
+                  )
+                }
+              >
+                <div className="flex items-center gap-1">
+                  {on && (
+                    <IconButton
+                      label={t("common.reload")}
+                      onClick={() => void reload(plugin.id)}
+                    >
+                      <RefreshCw className="size-3.5" />
+                    </IconButton>
+                  )}
+                  {/* A built-in plugin is switched off, never removed: it is
+                      part of the app, and the next update would bring it back. */}
+                  {!plugin.bundled && (
+                    <IconButton
+                      label={t("common.remove")}
+                      className="hover:text-destructive"
+                      onClick={() =>
+                        void remove(plugin.id).catch((error: unknown) =>
+                          setOutcome({
+                            text: messageOfError(error),
+                            failed: true,
+                          })
+                        )
+                      }
+                    >
+                      <Trash2 className="size-3.5" />
+                    </IconButton>
+                  )}
+                  <Switch
+                    checked={on}
+                    disabled={
+                      (!on && plugin.error !== null) ||
+                      state?.state === "loading"
+                    }
+                    onCheckedChange={(next) => void setEnabled(plugin.id, next)}
+                  />
+                </div>
+              </Row>
+            )
+          })}
+        </Card>
+      )}
+    </div>
+  )
+}
+
+function failureOf(status: PluginStatus | undefined): string | null {
+  return status?.state === "failed" ? status.error : null
+}
+
+/** What crossed the bridge as an error, without Electron's `Error invoking
+ * remote method '…':` in front of the sentence main wrote. */
+function messageOfError(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error)
+  return text.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, "")
+}
+
+/**
+ * Which build this is, and the button that replaces it.
+ *
+ * The same store the status bar's pill reads, and the same install — this page
+ * exists because a pill that only appears when there is news cannot answer
+ * "am I up to date?", and because somebody who skipped a version needs
+ * somewhere to change their mind. So the dismissal is deliberately ignored
+ * here: a section headed Updates is not a place to hide one.
+ *
+ * There is no "check automatically" switch. The check is one request every six
+ * hours against a public endpoint, carrying nothing about the user — a
+ * preference for that is a decision nobody has enough information to make, and
+ * every setting costs a line somebody has to read.
+ */
+function UpdatesSection() {
+  const check = useUpdates((state) => state.check)
+  const checking = useUpdates((state) => state.checking)
+  const installing = useUpdates((state) => state.installing)
+  const progress = useUpdates((state) => state.progress)
+  const error = useUpdates((state) => state.error)
+  const refresh = useUpdates((state) => state.refresh)
+  const install = useUpdates((state) => state.install)
+  // Dismissal is the pill's business, not this page's.
+  const update = useUpdates((state) => pendingUpdate(state, false))
+  const [versions, setVersions] = useState<ClaudeVersions | null>(null)
+  const telemetry = useSettings((state) => state.telemetry)
+  const setTelemetry = useSettings((state) => state.setTelemetry)
+  const t = useT()
+
+  const askVersions = () =>
+    void window.desktop.claudeVersions().then(setVersions)
+  // Asked on open rather than at launch: the CLI updates itself, so the answer
+  // is worth having only when somebody is looking at it.
+  useEffect(askVersions, [])
+
+  return (
+    <Card>
+      <Row
+        title={t("settings.updates.version")}
+        description={
+          !check
+            ? t("common.checking")
+            : t(
+                check.status === "current"
+                  ? "settings.updates.latest"
+                  : "settings.updates.current",
+                { version: check.current }
+              )
+        }
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={checking}
+          onClick={() => {
+            askVersions()
+            void refresh()
+          }}
+        >
+          <RefreshCw className={cn("size-3.5", checking && "animate-spin")} />
+          {t("settings.updates.checkNow")}
+        </Button>
+      </Row>
+
+      <Row
+        title={t("settings.updates.claudeCode")}
+        description={
+          !versions
+            ? t("common.checking")
+            : `CLI ${versions.cli ?? t("settings.updates.cliNotFound")} · Agent SDK ${versions.sdk}${
+                versions.error ? ` — ${versions.error}` : ""
+              }`
+        }
+      />
+
+      {update ? (
+        <Row
+          title={t("settings.updates.available", { version: update.version })}
+          description={
+            installing ? (
+              // The bar takes the description's place rather than sitting under
+              // the button: it is what this row is about while it is on screen,
+              // and the sentence it replaces is one the user has just acted on.
+              <span className="mt-1.5 block max-w-xs">
+                <UpdateProgressBar progress={progress} />
+              </span>
+            ) : update.installable ? (
+              t("settings.updates.restartNote")
+            ) : (
+              t("settings.updates.notInstallable")
+            )
+          }
+        >
+          <div className="flex items-center gap-2">
+            <a
+              href={update.url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              {t("settings.updates.whatsNew")}
+              <ExternalLink className="size-3" />
+            </a>
+            {update.installable && (
+              <Button
+                size="sm"
+                disabled={installing}
+                onClick={() => void install()}
+              >
+                {installLabel(installing, progress)}
+              </Button>
+            )}
+          </div>
+        </Row>
+      ) : (
+        check?.status === "unknown" && (
+          // Said out loud rather than left as silence: "no update" and "could
+          // not ask" look identical otherwise, and only one of them means the
+          // version on screen is worth trusting.
+          <Row
+            title={t("settings.updates.couldNotCheck")}
+            description={check.error}
+          >
+            <a
+              href={`${FEEDBACK_REPO}/releases`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              {t("settings.updates.releases")}
+              <ExternalLink className="size-3" />
+            </a>
+          </Row>
+        )
+      )}
+
+      {error && (
+        <p className="px-4 pb-3 text-xs leading-relaxed text-destructive">
+          {error} {t("settings.updates.installerLog")}{" "}
+          <code className="font-mono">~/.veystudio/update.log</code>.
+        </p>
+      )}
+
+      {/* Beside the version because it is the other thing this app says to a
+          server on its own, and the sentence under it is the whole of what is
+          sent — see `main/telemetry.ts`. */}
+      <Row
+        title={t("settings.updates.telemetry")}
+        description={t("settings.updates.telemetryDescription")}
+      >
+        <Switch checked={telemetry} onCheckedChange={setTelemetry} />
+      </Row>
+    </Card>
+  )
+}
+
+/** The box a section's rows sit in — one border around the group rather than
+ * one per row, so a section of three reads as three rows of one thing. */
+function Card({ children }: { children: ReactNode }) {
+  return <div className="divide-y rounded-lg border">{children}</div>
+}
+
+/** One setting: what it is, what it does, and the control at the end of the
+ * line. There was a `stacked` variant for a control too big for that — the tab
+ * strip's two placement pictures — and it went with them. */
+function Row({
+  title,
+  description,
+  children,
+}: {
+  /** A name, all but always — `ReactNode` because a plugin's carries the
+   * official badge beside it. */
+  title: ReactNode
+  /** A sentence, all but always — `ReactNode` because the update row swaps its
+   * own for a progress bar while an install runs. */
+  description: ReactNode
+  children?: ReactNode
+}) {
+  return (
+    <div className="flex gap-6 p-4">
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="text-sm leading-none font-medium">{title}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          {description}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center">{children}</div>
+    </div>
+  )
+}
+
+/** A handful of exclusive choices, short enough to show all at once. */
+function Segmented({
+  value,
+  options,
+  onPick,
+}: {
+  value: string
+  options: { value: string; label: string }[]
+  onPick: (value: string) => void
+}) {
+  return (
+    <div role="radiogroup" className="flex rounded-md border bg-muted/40 p-0.5">
+      {options.map((option) => {
+        const active = option.value === value
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onPick(option.value)}
+            className={cn(
+              "rounded-[5px] px-2.5 py-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              active
+                ? "bg-background font-medium text-foreground shadow-xs"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}

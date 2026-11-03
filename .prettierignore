@@ -1,0 +1,28 @@
+node_modules/
+coverage/
+.next/
+.bun-cache/
+.bun-tmp/
+
+# Build output: the renderer's bundle, the main process' bundle, the installers.
+dist-electron/
+dist-renderer/
+dist-plugins/
+release/
+
+# The site's `vitepress build` output and `vitepress dev` dependency cache,
+# both gitignored there.
+web/.vitepress/dist/
+web/.vitepress/cache/
+web/.wrangler/
+
+# The VS Code extension is its own package with its own build; its source is
+# formatted like the rest of the repo, its output is not.
+vscode-notes/dist/
+vscode-notes/.bun-cache/
+vscode-notes/.bun-tmp/
+
+# Lockfiles and generated manifests.
+bun.lock
+pnpm-lock.yaml
+.pnpm-store/

@@ -1,0 +1,292 @@
+/*
+ * What the home page and the guide share: the palette, the haze at the top
+ * and the bar across it (`NavBar.vue`). A theme stylesheet, on every page.
+ */
+:root {
+  color-scheme: dark;
+  --page: #09090c;
+  --raised: #0f0f13;
+  --edge: rgb(255 255 255 / 0.08);
+  --edge-strong: rgb(255 255 255 / 0.14);
+  --ink: #f4f4f5;
+  --body: #c9c9d1;
+  --muted: #8e8e99;
+  --faint: #5f5f69;
+  --accent: #8b5cf6;
+  --accent-hover: #7c4ff0;
+  --accent-soft: #c4b5fd;
+  --sans:
+    Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Cambria and Palatino ahead of Georgia: Windows' Georgia has no "ế",
+     and the browser draws it as "ê" with a loose acute beside it. */
+  --serif:
+    ui-serif, "New York", "Iowan Old Style", Charter, Cambria,
+    "Palatino Linotype", Georgia, serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+}
+:root {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* A wrapper round an HTML string (an icon) that leaves its contents to be
+   laid out as though it were not there. */
+.contents {
+  display: contents;
+}
+
+/* The haze at the top, and one curved hairline through it: light from
+   above rather than coloured blobs. Clipped in a box of its own, so it can
+   be wider than the page without the page scrolling sideways. */
+.sky {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 820px;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: -1;
+}
+.sky::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    1100px 560px at 50% -120px,
+    rgb(124 92 246 / 0.42),
+    rgb(76 52 160 / 0.14) 55%,
+    transparent 80%
+  );
+}
+.sky::after {
+  /* High enough to pass over the chip and not through the headline. */
+  content: "";
+  position: absolute;
+  left: -30%;
+  right: -30%;
+  top: -880px;
+  height: 1020px;
+  border-radius: 50%;
+  border-bottom: 1px solid rgb(255 255 255 / 0.1);
+  background: radial-gradient(
+    closest-side,
+    rgb(255 255 255 / 0.035),
+    transparent
+  );
+}
+
+/* ---- Navigation ---- */
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.1rem 0;
+  border-bottom: 1px solid var(--edge);
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+/* The bare mark, sized to the name beside it the way the app's own wordmark
+   is — it is wider than tall, so the height is what is set. */
+.logo > svg {
+  height: 1.1em;
+  width: auto;
+}
+/* The wordmark, sized to the text around it — `WORDMARK_CSS` in
+   `theme/brand.ts`. */
+.wordmark {
+  white-space: nowrap;
+}
+.pill {
+  display: flex;
+  gap: 2px;
+  margin: 0 auto;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--edge-strong);
+  background: rgb(255 255 255 / 0.04);
+}
+.pill a {
+  padding: 0.32rem 0.85rem;
+  border-radius: 7px;
+  font-size: 0.86rem;
+  color: var(--body);
+}
+.pill a:hover {
+  background: rgb(255 255 255 / 0.07);
+  color: var(--ink);
+}
+.nav-end {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  color: var(--muted);
+}
+.lang svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-right: 0.3rem;
+}
+.lang a {
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+.lang a:hover {
+  color: var(--ink);
+}
+.lang a[aria-current] {
+  color: var(--ink);
+}
+.site-nav .github {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.site-nav .github:hover {
+  color: var(--ink);
+}
+.site-nav .github svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* ---- Buttons: words, then an icon in its own cell ---- */
+.button {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 7px;
+  font-weight: 500;
+  font-size: 0.92rem;
+  border: 1px solid var(--edge-strong);
+  white-space: nowrap;
+  overflow: hidden;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+.button span {
+  padding: 0.62rem 1rem;
+}
+.button i {
+  display: grid;
+  place-items: center;
+  padding: 0 0.75rem;
+  border-left: 1px solid var(--edge-strong);
+}
+.button svg {
+  width: 1rem;
+  height: 1rem;
+}
+.button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.button.primary i {
+  border-left-color: rgb(255 255 255 / 0.28);
+}
+.button.primary:hover {
+  background: var(--accent-hover);
+}
+.button.ghost {
+  background: rgb(255 255 255 / 0.02);
+}
+.button.ghost:hover {
+  background: rgb(255 255 255 / 0.06);
+}
+.site-nav .button {
+  font-size: 0.84rem;
+}
+.site-nav .button span {
+  padding: 0.42rem 0.8rem;
+}
+.site-nav .button i {
+  padding: 0 0.55rem;
+}
+
+@media (max-width: 900px) {
+  .pill {
+    display: none;
+  }
+  .nav-end {
+    margin-left: auto;
+  }
+}
+/* A phone has room for the name and the language, not a third control —
+   and the hero's own download button is the next thing on screen. */
+@media (max-width: 480px) {
+  .site-nav .download {
+    display: none;
+  }
+}
+
+/* VitePress's search button, drawn as the bar's other buttons are: a hairline
+   and no fill, the Download button's height. */
+.site-nav .site-search {
+  flex-grow: 0;
+  padding-left: 0;
+}
+.site-nav .DocSearch-Button {
+  height: 36px;
+  margin: 0;
+  border: 1px solid var(--edge-strong);
+  border-radius: 7px;
+  background: rgb(255 255 255 / 0.02);
+  transition: background 0.15s;
+}
+.site-nav .DocSearch-Button:hover {
+  border-color: var(--edge-strong);
+  background: rgb(255 255 255 / 0.06);
+}
+
+/* The bar, on every page (`Layout.vue`). In the page's flow below the
+   desktop layout, as VitePress's own bar is: there the guide's sidebar is a
+   drawer behind the "Menu" strip, which sticks to the top once the bar has
+   scrolled away — a bar fixed over it hid the only way to the sidebar. */
+.site-header {
+  position: relative;
+  z-index: var(--vp-z-index-nav);
+  height: var(--vp-nav-height);
+  /* VitePress's `optimizeLegibility` misplaced Vietnamese tone marks at
+     the bar's size ("Bảng giá"); the home page draws it with `auto`. */
+  text-rendering: auto;
+}
+@media (min-width: 960px) {
+  .site-header {
+    position: fixed;
+    inset: 0 0 auto;
+    transition: background 0.2s;
+  }
+  .site-header.scrolled {
+    background: rgb(9 9 12 / 0.72);
+    backdrop-filter: blur(12px);
+  }
+}
+
+/* The home page's column and type, set here rather than inherited from the
+   page under it, which is the home page or the guide. */
+.site-header-inner {
+  width: min(1080px, 100% - 3rem);
+  margin-inline: auto;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* Room for the scrollbar on every page, scrolling or not: a short page (the
+   guide's index) had none, so the centred bar moved sideways by half a
+   scrollbar on the way to it. */
+html {
+  scrollbar-gutter: stable;
+}

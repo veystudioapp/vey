@@ -1,0 +1,14 @@
+{
+  // The name the Worker was given while it was a Nitro server (Nitro made it
+  // up from the repository and the directory). Kept, so a deploy replaces that
+  // Worker at the same workers.dev address rather than starting a second one.
+  "name": "vsclaude-visual-studio-claude-vsclaude-cloud",
+  "compatibility_date": "2026-10-01",
+  // Assets alone, no script: the site is all that is served. The default
+  // `html_handling` answers `/docs/foo` with `foo.html`, which is what
+  // VitePress's `cleanUrls` links to.
+  "assets": {
+    "directory": ".vitepress/dist",
+    "not_found_handling": "404-page",
+  },
+}

@@ -1,0 +1,132 @@
+import type { MessageKey } from "../i18n"
+import { nameOf } from "./paths"
+
+/**
+ * How a file can be shown, and which way it is shown by default.
+ *
+ * Most files have one honest answer — a `.ts` is text, a `.png` is a picture —
+ * and for those this decides nothing the extension had not already decided.
+ * Two are genuinely more than one thing. An SVG is a picture, and also a text
+ * file people open to change a `fill` or a `viewBox`. A `.md` is three: the
+ * source somebody edits, the document somebody reads, and — since the studio
+ * has a block editor anyway — prose somebody writes without typing the syntax.
+ * Every one of them is reached from the tree's right-click menu.
+ *
+ * `blocks` is that block editor, offered for a `.md` alone.
+ *
+ * `diff` is the odd one: every other viewer here is a way of reading the file,
+ * and that one is a way of reading what has happened to it — the committed side
+ * beside the working one. Offered for anything textual rather than only for a
+ * file git has something to say about, because "what has changed in this" is a
+ * fair question to ask of a file that turns out to have changed in nothing, and
+ * a menu entry that appears and disappears with the working tree is one nobody
+ * can learn. It is never the default: a diff is what somebody asks for.
+ */
+export type Viewer = "image" | "text" | "markdown" | "html" | "blocks" | "diff"
+
+/**
+ * What the studio will draw as a picture.
+ *
+ * The same list the main process will hand back bytes for (`IMAGE_MIME_TYPES`
+ * in `main/ipc.ts`), because a viewer offered for a type that comes back as
+ * `application/octet-stream` is an empty box with no explanation. Deliberately
+ * not every format a browser can decode: `.ico` and `.avif` render, but nobody
+ * opens a workspace to look at one, and each entry here is a row in a menu.
+ */
+const IMAGE_EXTENSIONS = new Set([
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "bmp",
+  "svg",
+])
+
+/** The extension, lowercased, without its dot — `""` for a name that has none,
+ * and for a dotfile, whose leading dot is part of the name. */
+function extensionOf(filePath: string): string {
+  const name = nameOf(filePath).toLowerCase()
+  const dot = name.lastIndexOf(".")
+  return dot > 0 ? name.slice(dot + 1) : ""
+}
+
+export function isImage(filePath: string): boolean {
+  return IMAGE_EXTENSIONS.has(extensionOf(filePath))
+}
+
+/**
+ * What the studio will render as a document.
+ *
+ * Just the two spellings of markdown, and deliberately not `.mdx`: that is
+ * markdown with JSX in it, and a commonmark parser reads a component tag as
+ * either nothing or a stray paragraph — a preview that quietly drops half the
+ * file is worse than no preview offered.
+ */
+const MARKDOWN_EXTENSIONS = new Set(["md", "markdown"])
+
+export function isMarkdown(filePath: string): boolean {
+  return MARKDOWN_EXTENSIONS.has(extensionOf(filePath))
+}
+
+/** What the studio will render as a page, in a sandboxed frame. */
+const HTML_EXTENSIONS = new Set(["html", "htm"])
+
+export function isHtml(filePath: string): boolean {
+  return HTML_EXTENSIONS.has(extensionOf(filePath))
+}
+
+/**
+ * What the studio will open in the note editor.
+ *
+ * An extension of this app's own, unlike everything else in this file: the
+ * Explorer's other viewers are chosen for formats that already existed, and
+ * this one is a file the studio writes so that a note can live in the
+ * repository it is about rather than only in the workspace's own directory.
+ */
+/**
+ * Every way this file can be shown, best first.
+ *
+ * The order is the menu's order and the first entry is the default, so there is
+ * one list rather than a list and a separate rule about it. A length of one
+ * means the tree draws no "open with" group at all: a menu whose only choice is
+ * the thing already on screen is a menu that teaches nothing.
+ */
+export function viewersFor(filePath: string): Viewer[] {
+  if (isImage(filePath)) {
+    // An SVG is a picture first — that is what somebody double-clicking one
+    // wants to see — and text when they say so, which is what earns it a diff
+    // too. A PNG has neither: two versions of it as text is nothing anybody
+    // reads, and comparing the pictures is a different feature.
+    return extensionOf(filePath) === "svg"
+      ? ["image", "text", "diff"]
+      : ["image"]
+  }
+
+  // A `.md` opens as the document, not the source. The Explorer is where a
+  // project's files are worked on, and a README reached from a tree of source
+  // is more often being read than changed — so the rendered view is the one
+  // arrived at, and the editor is the one asked for.
+  if (isMarkdown(filePath)) return ["markdown", "text", "blocks", "diff"]
+
+  // An `.html` opens as the page, for the `.md`'s reason: what somebody clicks
+  // one to find out is what it looks like. The source is `Edit` in the pane's
+  // header.
+  if (isHtml(filePath)) return ["html", "text", "diff"]
+
+  return ["text", "diff"]
+}
+
+export function defaultViewer(filePath: string): Viewer {
+  return viewersFor(filePath)[0]!
+}
+
+/** What a viewer is called, in the "Open with" menu. */
+export const VIEWER_LABELS: Record<Viewer, MessageKey> = {
+  image: "files.viewers.image",
+  text: "files.viewers.text",
+  markdown: "files.viewers.markdown",
+  html: "files.viewers.html",
+  blocks: "files.viewers.blocks",
+  diff: "files.viewers.diff",
+}

@@ -1,0 +1,24 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!--
+  The app's icon: the mark in white on a black plate. The one source for
+  every logo the app ships — `make icon` (scripts/app-icon.mjs) renders the
+  packaged icon from it, the renderer serves it as the favicon
+  (src/renderer/public/favicon.svg is a copy), vsclaude-cloud's pages inline
+  it (server/utils/brand.ts) and docs/banner.svg does too.
+
+  The mark is resources/mark.svg, path for path, in its coordinates and
+  scaled into a 72-unit field centred on the plate — the transform is the
+  measured ink (6–94 by 21.5–78.5) and nothing else, so changing the mark
+  there is changing it here. Two colours and nothing else sit beside whatever
+  is on screen; a hairline rim at 30% grey is what a black plate needs to
+  keep an edge on a dark Dock, and it reads as the antialiasing on a light
+  one.
+-->
+<rect width="100" height="100" rx="22.5" fill="#000000"/>
+<g transform="translate(9.09 9.09) scale(0.8182)" stroke="#FFFFFF" stroke-width="13">
+  <path d="M6 72H34L62 28H94"/>
+  <path d="M6 28H22"/>
+  <path d="M78 72H94"/>
+</g>
+<rect x="0.5" y="0.5" width="99" height="99" rx="22" stroke="#808080" stroke-opacity="0.3"/>
+</svg>

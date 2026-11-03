@@ -1,0 +1,410 @@
+/*
+ * The studio's own motion: the launch screen's, the spinner, and the chat's
+ * `Working…` — the mark drawing itself, with its shimmer
+ * (`chat-skeleton.tsx`). That indicator was an SVG choreographed in
+ * five keyframe blocks, then a spritesheet, then a GIF, briefly a stock
+ * spinner, then three dots.
+ *
+ * The rest of the studio animates through what shadcn's components bring with
+ * them and nothing else. It is a file of its own rather than a block in
+ * `globals.css` because a keyframe is not a token, and because the next thing to
+ * animate should extend this list instead of writing a second one somewhere else.
+ *
+ * Everything here is a `--animate-*` token, read as a Tailwind `animate-*`
+ * utility. There was a block of plain classes below them for as long as the
+ * loader lived here; with it gone the file is back to one shape, which is the
+ * shape this header originally described.
+ *
+ * Three rules it is written to. A movement says where the thing came from, so
+ * nothing travels in a direction the layout does not already imply. Nothing a
+ * click waits on runs longer than 250ms — the launch sequence is slower only
+ * because nothing else is waiting on it. And every keyframe below moves opacity
+ * and transform alone, which are the two the compositor can run without laying
+ * the page out again.
+ *
+ * The distances are small on purpose: a third of a line, half a character. At
+ * that size the movement is not read as movement, only as the thing having
+ * arrived rather than appeared, which is the whole of what it is for.
+ */
+
+@theme {
+  /*
+   * Decelerating harder than a stock ease-out: things should cover most of
+   * their distance immediately and settle, which is what separates "arrived"
+   * from "was pushed".
+   */
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  /* A single overshoot, no bounce back — only for the few things that appear
+     out of nothing rather than moving from somewhere they already were. */
+  --ease-overshoot: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* `backwards` throughout: these are entrances, and a staggered one has to
+     hold at its first frame instead of sitting at full opacity until its delay
+     runs out. */
+  --animate-rise: rise 240ms var(--ease-out-quint) backwards;
+  --animate-glide: glide 220ms var(--ease-out-quint) backwards;
+  --animate-fade: fade 200ms ease-out backwards;
+  --animate-pop: pop 240ms var(--ease-overshoot) backwards;
+  --animate-settle: settle 420ms var(--ease-out-quint) backwards;
+
+  /* The two that loop: a launch screen that is still while the app is still
+     starting reads as one that is stuck. */
+  --animate-breathe: breathe 2.6s ease-in-out infinite;
+  --animate-sweep: sweep 1.8s ease-in-out infinite;
+
+  /* The chat's turn indicator, `.mark-trace` below: the mark drawn, held,
+     and wiped. The shimmer holds still for the last third of its cycle so
+     the light reads as passing over the word rather than circling it. */
+  --animate-trace-step: trace-step 2.4s var(--ease-out-quint) infinite;
+  --animate-trace-stub: trace-stub 2.4s var(--ease-out-quint) infinite;
+  --animate-shimmer: shimmer 2.4s ease-in-out infinite;
+
+  /* `.spinner` below: half a turn a second, which brings its four dots back
+     to where they started. Eased for the outer four; the inner four override
+     the timing to linear, and the two drifting apart and back is the motion. */
+  --animate-spinner: spinner 1s ease infinite;
+
+  /* The setup screen's illustrations (`claude-setup.tsx`): the chips beside a
+     page's picture drifting a few pixels, slow enough to read as weightless
+     rather than as something asking to be clicked. */
+  --animate-float: float 5s ease-in-out infinite;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.375rem);
+  }
+}
+
+@keyframes glide {
+  from {
+    opacity: 0;
+    transform: translateX(-0.5rem);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes float {
+  50% {
+    transform: translateY(-0.3rem);
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(260%);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  66%,
+  to {
+    background-position: 0% 0;
+  }
+}
+
+@keyframes spinner {
+  to {
+    transform: rotate(0.5turn);
+  }
+}
+
+/*
+ * The chat's trace: drawn on (offset 100 → 0), held whole, then wiped from the
+ * start (0 → -100) — so the ink leaves the way it arrived instead of fading,
+ * and the next stroke begins on an empty mark. The step is drawn first, the
+ * two stubs after it; every stroke carries `pathLength="100"`, so the offsets
+ * here are percentages of its own length whatever that really is.
+ */
+@keyframes trace-step {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  30%,
+  68% {
+    stroke-dashoffset: 0;
+  }
+  90%,
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes trace-stub {
+  0%,
+  15% {
+    stroke-dashoffset: 100;
+  }
+  48%,
+  74% {
+    stroke-dashoffset: 0;
+  }
+  96%,
+  100% {
+    stroke-dashoffset: -100;
+  }
+}
+
+/*
+ * The studio's spinner (`ui/spinner.tsx`): eight dots, four large violet ones
+ * at the compass points (`::after`) over four smaller pink ones inside them
+ * (`::before`), each set turning half a turn a second — the outer eased, the
+ * inner linear, so they slip apart and close up again. The pattern is
+ * css-loaders.com's `l12`, picked by the user, in the logo's colours.
+ *
+ * It was the VS lettermark with a light running along it, and with a working
+ * chat marked on its row, its tab, its project's icon and in the pane at once,
+ * the logo was the busiest thing on screen and said nothing the first copy had
+ * not. So the mark is kept for the two places that are the app speaking —
+ * the launch screen and the chat's `Working…` (`.mark-trace`). Between the two
+ * came a plain ring (too plain), then a violet-to-amber comet, and a sheet of
+ * other rings beside it; this replaced them all. `docs/design.md` § The chat's
+ * loading indicator.
+ *
+ * Every size is a fraction of the box — dots a quarter and a fifth of it, the
+ * inner set inset by 8% — so one rule holds from the 12px a row draws (3px
+ * dots) to a dialog's 24px. Only the pseudo-elements turn, so a caller's
+ * `translate-*` on the box itself is never fought over, and they keep turning
+ * under reduced motion for the reason given there.
+ *
+ * On a filled primary button the violet would vanish into the fill, so there
+ * it is the button's own text colour, the inner set at a softer strength.
+ */
+.spinner {
+  --spinner-outer: #8b5cf6;
+  --spinner-inner: #c76bc4;
+  display: inline-grid;
+}
+
+.spinner::before,
+.spinner::after {
+  --spinner-dot: no-repeat
+    radial-gradient(farthest-side, var(--spinner-ink) 92%, transparent);
+  content: "";
+  grid-area: 1 / 1;
+  background:
+    var(--spinner-dot) 50% 0,
+    var(--spinner-dot) 50% 100%,
+    var(--spinner-dot) 100% 50%,
+    var(--spinner-dot) 0 50%;
+  animation: var(--animate-spinner);
+}
+
+.spinner::after {
+  --spinner-ink: var(--spinner-outer);
+  background-size: 24% 24%;
+}
+
+.spinner::before {
+  --spinner-ink: var(--spinner-inner);
+  margin: 8%;
+  background-size: 19% 19%;
+  animation-timing-function: linear;
+}
+
+.bg-primary .spinner {
+  --spinner-outer: currentColor;
+  --spinner-inner: color-mix(in oklab, currentColor 60%, transparent);
+}
+
+/*
+ * The chat's `Working…` mark (`chat-skeleton.tsx`): the mark drawn in the
+ * text's own colour over a faint copy of itself. Its height is the line's —
+ * `1em` of the 12px row is the cap height of the text beside it, the way
+ * `Wordmark` sits — and its width follows from the mark.
+ */
+.mark-trace {
+  height: 0.95em;
+  width: auto;
+  overflow: visible;
+}
+
+.mark-trace-ghost {
+  opacity: 0.15;
+}
+
+.mark-trace-step,
+.mark-trace-stub {
+  stroke-dasharray: 100 200;
+  stroke-dashoffset: 100;
+}
+
+.mark-trace-step {
+  animation: var(--animate-trace-step);
+}
+
+.mark-trace-stub {
+  animation: var(--animate-trace-stub);
+}
+
+/*
+ * A light passing across a line of text, left to right. It animates
+ * `background-position`, the one keyframe here that is not opacity or
+ * transform — it repaints, but what it repaints is one short word, which is
+ * cheaper than layering a second copy of the text to move a mask over it.
+ */
+.text-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    var(--muted-foreground) 40%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 60%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  color: transparent;
+  animation: var(--animate-shimmer);
+}
+
+/*
+ * A light running round a box's border while something writes into it — the
+ * commit message while `claude` drafts it (`commit-box.tsx`). The spinner on
+ * the button says work is happening; this says where the answer will land.
+ *
+ * Also the ask card while it waits on an answer (`chat-ask.tsx`), and the
+ * search and replace fields while a slow search or a replace runs
+ * (`search-section.tsx`).
+ *
+ * The ring is a pseudo-element over the box's own 1px border, a conic gradient
+ * masked down to that border, so the box underneath keeps its background, focus
+ * ring and size. An absolute child starts inside its parent's border, so the
+ * ring reaches out by `--run-edge` to lie on it; a wrapper with no border of
+ * its own around a box that has one sets that to `0px`. What turns is the
+ * gradient's start angle, registered with
+ * `@property` so it interpolates — an unregistered custom property would jump.
+ * Like the shimmer it repaints, and what it repaints is one thin outline.
+ */
+@property --run-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes border-run {
+  to {
+    --run-angle: 360deg;
+  }
+}
+
+.border-run {
+  position: relative;
+}
+
+.border-run[data-running]::after {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--run-edge, 1px));
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--run-angle),
+    transparent 0 55%,
+    color-mix(in oklab, var(--primary) 40%, transparent) 75%,
+    var(--primary) 92%,
+    transparent
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  animation: border-run 1.6s linear infinite;
+}
+
+/*
+ * The onboarding tour's spotlight (`onboarding-tour.tsx`) sliding from one
+ * target to the next. A transition rather than a keyframe because the
+ * destination is measured off the page, not known in advance; it is here with
+ * the keyframes because it is the studio's own motion and this is the list.
+ * It moves the box's edges, which lays out — but the box is one `fixed`
+ * element with nothing inside it, so there is nothing else to lay out.
+ */
+.tour-spot {
+  transition:
+    top 220ms var(--ease-out-quint),
+    left 220ms var(--ease-out-quint),
+    width 220ms var(--ease-out-quint),
+    height 220ms var(--ease-out-quint);
+}
+
+/*
+ * The entrances are decoration — they say a thing arrived, never what the
+ * thing is — so all of them go, and the launch screen assembles in one frame.
+ *
+ * The two loops are deliberately left running: they are the only thing on
+ * screen saying the launch has not stalled, and a spinner that does not spin
+ * is not a calmer app, it is one that looks hung. Both are opacity in place,
+ * which is the kind of motion this setting is least aimed at. `.spinner` keeps
+ * turning for the same reason — eight dots turning in a 12px box is no
+ * movement of the page, and still ones are exactly the hung app. The chat's trace
+ * follows the same argument and drops its writing for that same breathing, the
+ * whole glyph drawn; the shimmer is pure decoration beside it and stops.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --animate-rise: none;
+    --animate-glide: none;
+    --animate-fade: none;
+    --animate-pop: none;
+    --animate-settle: none;
+    --animate-trace-step: breathe 1.6s ease-in-out infinite;
+    --animate-trace-stub: breathe 1.6s ease-in-out infinite;
+    --animate-shimmer: none;
+    --animate-float: none;
+    --animate-coin-land: fade 200ms ease-out backwards;
+    --animate-scatter: fade 200ms ease-out backwards;
+    --animate-twinkle: none;
+    --animate-halo: none;
+  }
+
+  /* Scoped to the launch screen's own crossfade rather than left to a blanket
+     rule over every transition in the app. */
+  [data-splash],
+  .tour-spot {
+    transition-duration: 1ms !important;
+  }
+
+  /* The button's spinner already says the draft is running, so the ring stops
+     travelling and breathes in place instead. */
+  .border-run[data-running]::after {
+    animation: breathe 2.6s ease-in-out infinite;
+  }
+
+  /* Breathing replaces the drawing, so the mark has to be there whole to
+     breathe — its resting offset is the undrawn one. */
+  .mark-trace-step,
+  .mark-trace-stub {
+    stroke-dashoffset: 0;
+  }
+}

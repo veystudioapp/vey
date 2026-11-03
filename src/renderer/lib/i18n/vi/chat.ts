@@ -1,0 +1,163 @@
+import type { Messages } from "../en"
+
+export const chat: Messages["chat"] = {
+  composer: {
+    placeholder: "Hỏi về bản checkout này…",
+    resize: "Đổi kích thước ô soạn tin",
+    resizeHint: "Kéo để đổi kích thước, nhấp đúp để đặt lại",
+    leaveSelectionOut: "Bỏ vùng chọn ra",
+    addToMessage: "Thêm vào tin nhắn này",
+    attachFile: "Đính kèm file",
+    mentionFile: "Nhắc đến một file…",
+    runCommand: "Chạy một lệnh…",
+    mcpServers: "Máy chủ MCP…",
+    stop: "Dừng",
+    send: "Gửi",
+    sendNext: "Gửi tiếp",
+    contextWindow: "Cửa sổ ngữ cảnh: {label} trước khi tự động thu gọn",
+    noBreakdown: "Không có số liệu chi tiết.",
+    thisApp: "app này",
+    askingCommands: "Đang hỏi claude những lệnh nó chạy được…",
+    noCommand: "Không có lệnh nào khớp.",
+  },
+  model: {
+    inherit: "Kế thừa",
+    inheritDetail: "Theo cài đặt `claude` của riêng bạn",
+    model: "Model",
+    title: "Model nào trả lời và được suy nghĩ đến đâu",
+    new: "MỚI",
+    reload: "Tải lại danh sách model",
+    reloading: "Đang hỏi claude…",
+  },
+  effort: {
+    low: "Thấp",
+    medium: "Vừa",
+    high: "Cao",
+    xhigh: "Rất cao",
+    max: "Tối đa",
+  },
+  permission: {
+    plan: {
+      label: "Lập kế hoạch",
+      short: "Kế hoạch",
+      detail: "Đọc, rồi trả lời bằng một kế hoạch. Không thay đổi gì.",
+    },
+    read: {
+      label: "Chỉ đọc",
+      short: "Chỉ đọc",
+      detail: "Đọc và trả lời. Không sửa file, không chạy shell.",
+    },
+    ask: {
+      label: "Hỏi trước",
+      short: "Hỏi trước",
+      detail:
+        "Hỏi đúng những gì claude CLI sẽ hỏi, theo cài đặt của riêng bạn.",
+    },
+    edits: {
+      label: "Sửa file",
+      short: "Sửa file",
+      detail: "Sửa file và chạy lệnh trong bản checkout này.",
+    },
+    full: {
+      label: "Toàn quyền",
+      short: "Toàn quyền",
+      detail: "Không hỏi gì cả, kể cả các công cụ app này chưa liệt kê.",
+    },
+  },
+  concise: {
+    label: "Ngắn gọn",
+    title:
+      "Trả lời ngắn hơn: không mở bài, không tóm tắt lại sau khi dùng tool. Ít token đầu ra hơn.",
+  },
+  profile: {
+    title: "CLAUDE_CONFIG_DIR mà các lượt của chat này chạy theo",
+    heading: "Tài khoản cho chat này",
+    defaultAccountFallback: "Tài khoản mà `claude` của bạn đang đăng nhập",
+    noDirectory: "Chưa đặt thư mục",
+  },
+  limit: {
+    continue: "Tiếp tục",
+    continueWith: "Tiếp tục với {name}",
+  },
+  ask: {
+    allow: "Cho phép",
+    alwaysAllow: "Luôn cho phép",
+    deny: "Từ chối",
+    pickMany: "Chọn tất cả các mục phù hợp",
+    typeOwn: "Tự nhập câu trả lời",
+    typePlaceholder: "Nhập câu trả lời…",
+    answer: "Trả lời",
+  },
+  images: {
+    open: "Mở {label}",
+    takeOut: "Bỏ {label} ra",
+  },
+  planUsage: {
+    title: "Mức dùng gói",
+    usage: "Mức dùng",
+    noWindows: "Claude không báo khung sử dụng nào cho gói này.",
+    meterTitle: "Giới hạn {window}: đã dùng {percent}",
+    meterTitleReset: "Giới hạn {window}: đã dùng {percent}, {reset}",
+    window: {
+      fiveHour: "5 giờ",
+      sevenDay: "7 ngày",
+      sevenDayOpus: "Opus 7 ngày",
+      sevenDaySonnet: "Sonnet 7 ngày",
+      sevenDayApps: "ứng dụng 7 ngày",
+    },
+    short: {
+      fiveHour: "5h",
+      sevenDay: "7n",
+    },
+    resetsNow: "đặt lại ngay",
+    resetsInMinutes: "đặt lại sau {minutes} phút",
+    resetsInHours: "đặt lại sau {hours} giờ",
+    resetsInHoursMinutes: "đặt lại sau {hours} giờ {minutes} phút",
+    resetsAt: "đặt lại {day} {time}",
+    reached: "{who} đã chạm giới hạn {window}",
+    stopped: "Đã dừng. {what}",
+    stoppedReset: "Đã dừng. {what} · {reset}",
+  },
+  mcp: {
+    servers: "Máy chủ MCP",
+    serversHeading: "Máy chủ",
+    asking: "Đang hỏi `claude` xem có những gì…",
+    noneTitle: "Không có máy chủ MCP nào ở đây",
+    noneBody:
+      "Thêm bằng `claude mcp add`, hoặc kết nối vào tài khoản của bạn trên claude.ai, rồi bấm Làm mới.",
+    removeTitle: "Gỡ “{name}”?",
+    removeBody:
+      "Thao tác này chạy `claude mcp remove` trên cấu hình `claude` của riêng bạn, nên máy chủ sẽ biến mất khỏi mọi chat ở đây *và* khỏi terminal của bạn. Không thể hoàn tác — muốn thêm lại phải dùng `claude mcp add`. Để giữ nó nhưng không dùng trong chat này, hãy dùng công tắc.",
+    removeBodyScoped:
+      "Thao tác này chạy `claude mcp remove` trên cấu hình `claude` {scope} của riêng bạn, nên máy chủ sẽ biến mất khỏi mọi chat ở đây *và* khỏi terminal của bạn. Không thể hoàn tác — muốn thêm lại phải dùng `claude mcp add`. Để giữ nó nhưng không dùng trong chat này, hãy dùng công tắc.",
+    chip: "MCP · tắt {count}",
+    chipTitle: "Một số công cụ MCP đang bị tắt trong chat này",
+    allow: "Cho phép {name} trong chat này",
+    tools: "{count} công cụ",
+    tools_one: "{count} công cụ",
+    allOff: "tắt hết",
+    someOff: "tắt {count}",
+    tokensTitle:
+      "Ước tính từ tên và mô tả công cụ, khoảng 4 ký tự mỗi token. Danh sách không có schema tham số nên con số thực tế cao hơn.",
+    tokensPerTurn: "≥ ~{tokens} token/lượt",
+    authorize: "Cấp quyền trên claude.ai",
+    signInCli:
+      "Đăng nhập bằng `/mcp` trong một phiên `claude` — Terminal ở dock là được — rồi bấm Làm mới.",
+    noTools: "Máy chủ này không có công cụ nào.",
+    noToolsYet: "Máy chủ này chưa có công cụ nào cho đến khi kết nối.",
+    filterPlaceholder: "Lọc {count} công cụ…",
+    filterLabel: "Lọc công cụ",
+    noMatch: "Không có công cụ nào khớp “{query}”.",
+    configNote:
+      "Trong cấu hình `claude` *{scope}* của bạn. Gỡ nó sẽ xóa khỏi mọi chat và terminal của bạn.",
+    removeServer: "Gỡ máy chủ",
+    state: {
+      connected: "Đã kết nối",
+      failed: "Lỗi",
+      needsAuth: "Cần đăng nhập",
+      pending: "Đang kết nối",
+      disabled: "Đã tắt",
+      unknown: "Không rõ",
+    },
+  },
+}

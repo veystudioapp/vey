@@ -1,0 +1,27 @@
+<svg viewBox="6 21.5 88 57" fill="none" xmlns="http://www.w3.org/2000/svg">
+<!--
+  The app's mark: a lane stepping up onto the next, with the lane it joined
+  running on to the left of the step and the one it left running on to the
+  right. It is the switch that does not stop — a chat moved from an account
+  that has run out to one that has not, mid-conversation, and carried on —
+  which is the thing this studio does that the plain CLI does not. Drawn in
+  the register of a mark rather than a letter: one stroke width, ends cut
+  square, a mitred step. It was the VS lettermark (docs/design.md § The name
+  has the rounds); a mark that says what the product does outlasts one that
+  spells its initials.
+
+  One colour — black here, `currentColor` where the app draws it, so it is
+  the text's own ink in either theme. Copied path for path into
+  resources/logo.svg (white, on the plate), src/renderer/components/studio/
+  mark.tsx (the renderer's one copy, which the wordmark, the system bar and
+  the chat's loader draw from), vsclaude-cloud/server/utils/brand.ts (the
+  site's logo and favicon), vsclaude-cloud/site/public/mark.svg (the guide's,
+  in white) and docs/banner.svg. The box is the ink's measured bounds, the
+  stroke's own half-width included.
+-->
+<g stroke="#000000" stroke-width="13">
+  <path d="M6 72H34L62 28H94"/>
+  <path d="M6 28H22"/>
+  <path d="M78 72H94"/>
+</g>
+</svg>

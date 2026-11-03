@@ -1,0 +1,182 @@
+name: Release
+
+# Installers are built here and nowhere else, so a release is a tag and
+# nothing more: `git tag v0.1.0 && git push --tags`. Running it by hand builds
+# the same three installers and leaves them as run artifacts without publishing
+# anything, which is how you find out a packaging change is broken before a tag
+# carries it.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    name: package (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not hide whether the other two are fine —
+      # the point of a release run is to learn that in one pass.
+      fail-fast: false
+      matrix:
+        include:
+          # macOS builds both architectures: `mac.target` in package.json
+          # declares arm64 and x64, and install.sh picks between them by
+          # filename. Deliberately not a universal build, which would double
+          # every download so that nobody has to choose.
+          - os: macos-latest
+            name: macos
+            target: --mac
+          - os: ubuntu-latest
+            name: linux
+            target: --linux
+          - os: windows-latest
+            name: windows
+            target: --win
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: bun install --frozen-lockfile
+
+      # The version in package.json is what names every artifact. A tag that
+      # disagrees with it would publish v0.2.0 containing Vey-0.1.0-arm64.dmg,
+      # which is only ever noticed by whoever downloads it.
+      - name: Tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
+      # Baked into main.cjs by scripts/build-electron.mjs, since the installed
+      # app has no .env. A repository variable, not a secret: the URL is
+      # readable in the bundle anyway. It is the studio's server, which now
+      # receives the anonymous usage counts alone; unset, none are sent — so a
+      # fork's build reports nothing to anyone. The variable under the app's
+      # old name is the fallback, for a repository that has not renamed it.
+      - run: bun run build
+        env:
+          VEYSTUDIO_AI_URL: ${{ vars.VEYSTUDIO_AI_URL || vars.VSCLAUDE_AI_URL }}
+
+      # Both are gitignored — the source art is committed and what is derived
+      # from it is not — so a fresh checkout has neither until this runs.
+      # electron-builder would otherwise fall back to a default icon and a
+      # default DMG background without failing.
+      - name: Generate icon and DMG background
+        run: |
+          bun scripts/app-icon.mjs
+          bun scripts/dmg-background.mjs
+
+      # The Developer ID goes into a keychain of our own rather than through
+      # CSC_LINK: electron-builder's throwaway keychain failed on the runner
+      # with `SecKeychainUnlock: The user name or passphrase you entered is
+      # not correct` at set-key-partition-list. Without the secret the job
+      # builds unsigned, so a fork can still run this.
+      - name: Import the Developer ID certificate
+        if: matrix.name == 'macos'
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+        run: |
+          [ -n "$MAC_CSC_LINK" ] || exit 0
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(openssl rand -hex 24)
+          echo "$MAC_CSC_LINK" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$MAC_CSC_KEY_PASSWORD" -f pkcs12 -A -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" \
+            $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$keychain"
+          echo "MAC_SIGNING=true" >> "$GITHUB_ENV"
+
+      - name: Build installers
+        # Signed by finding the identity imported above, and notarized with
+        # an Apple ID and an app-specific password — not an App Store Connect
+        # API key, which this team has no access to. Windows and Linux stay
+        # unsigned.
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.MAC_SIGNING == 'true' }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npx electron-builder ${{ matrix.target }} --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.name }}
+          # electron-builder writes blockmaps, a builder-debug.yml and the
+          # unpacked tree next to the installers; only the installers are the
+          # release.
+          path: |
+            release/*.dmg
+            release/*.AppImage
+            release/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: publish release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # The whole history and its tags, for the notes' range below.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          pattern: installers-*
+          merge-multiple: true
+
+      # The installers are published to this repository, next to the source
+      # they were built from — where the app's updater, install.sh and the
+      # site look. They went to a releases-only repository
+      # (`vey-studio-releases`) while the source was private, which needed a
+      # token of its own; `github.token` writes here.
+      # The notes are the commit subjects since the previous tag, written out
+      # in the release itself, without the version-bump commit, which says
+      # nothing the title does not. A `(#12)` stays: it is this repository's
+      # own pull request now, and GitHub links it.
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -lh installers
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "$GITHUB_REF_NAME^" 2>/dev/null || true)
+          range="${prev:+$prev..}$GITHUB_REF_NAME"
+          git log --no-merges --format='%s' "$range" \
+            | grep -Ev '^v?[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sed -E 's/^/- /' > notes.md || true
+          [ -s notes.md ] || echo "Maintenance release." > notes.md
+          cat notes.md
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Vey ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md \
+            installers/*

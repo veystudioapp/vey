@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign &amp; notarize Vey cho macOS trên GitHub Actions</title>
+    <style>
+      :root {
+        --bg: #fbfbfa;
+        --fg: #1f2328;
+        --muted: #59636e;
+        --line: #d1d9e0;
+        --code-bg: #f3f4f6;
+        --accent: #0969da;
+        --warn-bg: #fff8c5;
+        --warn-line: #d4a72c;
+        --ok-bg: #dafbe1;
+        --ok-line: #4ac26b;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1117;
+          --fg: #e6edf3;
+          --muted: #9198a1;
+          --line: #30363d;
+          --code-bg: #161b22;
+          --accent: #4493f8;
+          --warn-bg: #2e2a12;
+          --warn-line: #9e6a03;
+          --ok-bg: #12261e;
+          --ok-line: #2ea043;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          16px/1.65 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      main {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 48px 24px 96px;
+      }
+      h1 {
+        font-size: 30px;
+        line-height: 1.25;
+        margin: 0 0 8px;
+      }
+      h2 {
+        font-size: 22px;
+        margin: 48px 0 12px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--line);
+      }
+      h3 {
+        font-size: 17px;
+        margin: 28px 0 8px;
+      }
+      p,
+      li {
+        color: var(--fg);
+      }
+      .lead {
+        color: var(--muted);
+        margin: 0 0 24px;
+      }
+      a {
+        color: var(--accent);
+      }
+      code {
+        font:
+          14px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+        background: var(--code-bg);
+        padding: 1px 5px;
+        border-radius: 4px;
+      }
+      pre {
+        background: var(--code-bg);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px 16px;
+        overflow-x: auto;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 15px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        background: var(--code-bg);
+      }
+      .note,
+      .ok {
+        border-left: 4px solid;
+        border-radius: 6px;
+        padding: 10px 14px;
+        margin: 16px 0;
+      }
+      .note {
+        background: var(--warn-bg);
+        border-color: var(--warn-line);
+      }
+      .ok {
+        background: var(--ok-bg);
+        border-color: var(--ok-line);
+      }
+      nav ol {
+        padding-left: 20px;
+        margin: 0;
+      }
+      nav {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 14px 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Sign &amp; notarize Vey cho macOS trên GitHub Actions</h1>
+      <p class="lead">
+        Từ lúc có Apple Developer Program đến lúc CI ra được file
+        <code>.dmg</code> đã ký và đã notarize. Các bước tạo chứng chỉ làm trên
+        Windows bằng Git Bash, không cần máy Mac.
+      </p>
+
+      <nav>
+        <ol>
+          <li><a href="#overview">Tổng quan</a></li>
+          <li><a href="#csr">Tạo private key và CSR</a></li>
+          <li><a href="#cert">Tạo chứng chỉ Developer ID Application</a></li>
+          <li><a href="#p12">Ghép thành file .p12</a></li>
+          <li><a href="#notarize">Chuẩn bị thông tin notarize</a></li>
+          <li><a href="#secrets">Tạo secret trên GitHub</a></li>
+          <li><a href="#repo">Cấu hình trong repo</a></li>
+          <li><a href="#run">Chạy và kiểm tra</a></li>
+          <li><a href="#trouble">Lỗi thường gặp</a></li>
+          <li><a href="#after">Sau khi xong</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="overview">1. Tổng quan</h2>
+      <p>
+        Một bản app macOS phát hành ngoài App Store cần hai thứ để Gatekeeper
+        cho mở mà không chặn:
+      </p>
+      <ul>
+        <li>
+          <strong>Sign</strong> bằng chứng chỉ
+          <em>Developer ID Application</em>, có bật <em>hardened runtime</em>.
+        </li>
+        <li>
+          <strong>Notarize</strong>: gửi app cho Apple quét. Apple trả về một
+          "vé", được gắn (staple) vào app.
+        </li>
+      </ul>
+      <p>
+        electron-builder làm cả hai nếu có đủ chứng chỉ và thông tin đăng nhập.
+        Việc của mình là tạo ra chúng rồi đưa lên GitHub dưới dạng secret.
+      </p>
+
+      <h2 id="csr">2. Tạo private key và CSR</h2>
+      <p>
+        Mở <strong>Git Bash</strong> (có sẵn khi cài Git for Windows) và làm
+        trong một thư mục <strong>nằm ngoài repo</strong>, để không lỡ commit
+        private key.
+      </p>
+      <pre><code>mkdir -p ~/apple-signing &amp;&amp; cd ~/apple-signing
+MSYS_NO_PATHCONV=1 openssl req -new -newkey rsa:2048 -nodes \
+  -keyout devid.key -out devid.csr \
+  -subj "/emailAddress=&lt;email-apple-id&gt;/CN=Vey/C=VN"</code></pre>
+      <div class="note">
+        <strong>Bắt buộc có <code>MSYS_NO_PATHCONV=1</code>.</strong> Thiếu nó,
+        Git Bash tưởng chuỗi <code>/emailAddress=…</code> là đường dẫn và đổi
+        thành <code>C:/Program Files/Git/…</code>, làm CSR bị sai.
+      </div>
+      <p>
+        Kết quả là hai file: <code>devid.csr</code> để upload lên Apple, và
+        <code>devid.key</code> là private key. Giữ kỹ <code>devid.key</code>:
+        mất nó thì phải tạo lại chứng chỉ từ đầu.
+      </p>
+
+      <h2 id="cert">3. Tạo chứng chỉ Developer ID Application</h2>
+      <ol>
+        <li>
+          Vào
+          <a
+            href="https://developer.apple.com/account/resources/certificates/list"
+            >developer.apple.com › Certificates</a
+          >
+          và bấm <code>+</code>.
+        </li>
+        <li>
+          Chọn <strong>Developer ID Application</strong>, không chọn "Apple
+          Development" hay "Developer ID Installer".
+        </li>
+        <li>Nếu trang hỏi Profile Type, chọn <strong>G2 Sub-CA</strong>.</li>
+        <li>
+          Upload <code>devid.csr</code>, bấm Continue rồi
+          <strong>Download</strong>, sẽ được file
+          <code>developerID_application.cer</code>.
+        </li>
+        <li>Chép file <code>.cer</code> vào <code>~/apple-signing</code>.</li>
+      </ol>
+
+      <h2 id="p12">4. Ghép thành file .p12</h2>
+      <pre><code>cd ~/apple-signing
+openssl x509 -inform DER -in developerID_application.cer -out devid.pem
+openssl pkcs12 -export -legacy -inkey devid.key -in devid.pem -out devid.p12
+base64 -w0 devid.p12 &gt; devid.p12.b64</code></pre>
+      <ul>
+        <li>
+          Lệnh <code>pkcs12</code> sẽ hỏi <strong>mật khẩu export</strong>. Đặt
+          một mật khẩu mạnh và ghi lại, nó sẽ thành secret
+          <code>MAC_CSC_KEY_PASSWORD</code>.
+        </li>
+        <li>
+          Cần <code>-legacy</code> vì keychain của macOS không đọc được định
+          dạng p12 mặc định của OpenSSL 3.
+        </li>
+      </ul>
+      <p>Kiểm tra lại:</p>
+      <pre><code>openssl x509 -in devid.pem -noout -subject</code></pre>
+      <p>
+        Kết quả phải có
+        <code>Developer ID Application: &lt;tên&gt; (&lt;TEAM_ID&gt;)</code>.
+      </p>
+
+      <h2 id="notarize">5. Chuẩn bị thông tin notarize</h2>
+      <p>
+        Có hai cách. Repo này dùng
+        <strong>Apple ID + app-specific password</strong>, vì App Store Connect
+        của team chưa có mục API key (Integrations).
+      </p>
+      <table>
+        <tr>
+          <th>Thông tin</th>
+          <th>Lấy ở đâu</th>
+        </tr>
+        <tr>
+          <td>Apple ID</td>
+          <td>
+            Email đăng nhập developer.apple.com. Xem tại
+            <a href="https://account.apple.com">account.apple.com</a> › Sign-In
+            and Security.
+          </td>
+        </tr>
+        <tr>
+          <td>App-specific password</td>
+          <td>
+            account.apple.com › Sign-In and Security ›
+            <strong>App-Specific Passwords</strong> › tạo mới, đặt nhãn ví dụ
+            <code>vey-notarize</code>. Giá trị cần lưu là chuỗi
+            <code>xxxx-xxxx-xxxx-xxxx</code> Apple hiện ra (chỉ hiện một lần),
+            <strong>không phải</strong> cái nhãn.
+          </td>
+        </tr>
+        <tr>
+          <td>Team ID</td>
+          <td>
+            developer.apple.com/account › Membership details. Đó cũng là 10 ký
+            tự trong ngoặc ở dòng
+            <code>Developer ID Application: … (XXXXXXXXXX)</code>.
+          </td>
+        </tr>
+      </table>
+      <div class="note">
+        Cách còn lại là dùng App Store Connect API key (Users and Access ›
+        Integrations › Team Keys). Lần đầu, Account Holder phải bấm
+        <strong>Request Access</strong> thì mục này mới hiện. Nếu sau này chuyển
+        sang API key, workflow phải đổi sang các biến
+        <code>APPLE_API_KEY</code> / <code>APPLE_API_KEY_ID</code> /
+        <code>APPLE_API_ISSUER</code>.
+      </div>
+
+      <h2 id="secrets">6. Tạo secret trên GitHub</h2>
+      <p>
+        Vào repo ›
+        <strong
+          >Settings › Secrets and variables › Actions › New repository
+          secret</strong
+        >. Mỗi secret: nhập Name, dán giá trị vào ô Secret rồi bấm Add secret.
+      </p>
+      <table>
+        <tr>
+          <th>Name</th>
+          <th>Giá trị</th>
+          <th>Dùng để</th>
+        </tr>
+        <tr>
+          <td><code>MAC_CSC_LINK</code></td>
+          <td>Toàn bộ nội dung <code>devid.p12.b64</code></td>
+          <td>sign</td>
+        </tr>
+        <tr>
+          <td><code>MAC_CSC_KEY_PASSWORD</code></td>
+          <td>Mật khẩu export ở bước 4</td>
+          <td>sign</td>
+        </tr>
+        <tr>
+          <td><code>APPLE_ID</code></td>
+          <td>Email Apple ID</td>
+          <td>notarize</td>
+        </tr>
+        <tr>
+          <td><code>APPLE_APP_SPECIFIC_PASSWORD</code></td>
+          <td>Chuỗi <code>xxxx-xxxx-xxxx-xxxx</code></td>
+          <td>notarize</td>
+        </tr>
+        <tr>
+          <td><code>APPLE_TEAM_ID</code></td>
+          <td>Team ID 10 ký tự</td>
+          <td>notarize</td>
+        </tr>
+      </table>
+      <p>
+        Chuỗi base64 rất dài, đừng gõ tay. Copy vào clipboard trong Git Bash
+        bằng lệnh:
+      </p>
+      <pre><code>cat ~/apple-signing/devid.p12.b64 | clip</code></pre>
+      <p>
+        Khi dán, đừng để thừa dấu cách hay xuống dòng ở cuối.
+        <code>RELEASES_TOKEN</code> (để publish release) đã có từ trước, không
+        liên quan đến việc sign.
+      </p>
+      <div class="note">
+        <code>CSC_IDENTITY_AUTO_DISCOVERY</code>
+        <strong>không phải secret</strong>. Workflow tự đặt nó thành
+        <code>true</code> sau khi import chứng chỉ thành công.
+      </div>
+
+      <h2 id="repo">7. Cấu hình trong repo</h2>
+      <h3><code>resources/entitlements.mac.plist</code></h3>
+      <p>
+        Notarize đòi hardened runtime, và khi bật nó thì Electron cần thêm
+        quyền:
+      </p>
+      <ul>
+        <li>
+          <code>com.apple.security.cs.allow-jit</code> và
+          <code>allow-unsigned-executable-memory</code>: không có thì V8 không
+          chạy được. Daemon và tsserver là chính binary này chạy với
+          <code>ELECTRON_RUN_AS_NODE</code>, nên cũng nhận các quyền này.
+        </li>
+        <li>
+          <code>com.apple.security.cs.disable-library-validation</code>: để nạp
+          module native của node-pty và <code>typescript</code> riêng của từng
+          project.
+        </li>
+      </ul>
+      <h3><code>package.json</code> › <code>build.mac</code></h3>
+      <pre><code>"hardenedRuntime": true,
+"entitlements": "resources/entitlements.mac.plist",
+"entitlementsInherit": "resources/entitlements.mac.plist"</code></pre>
+      <p>
+        Không đặt <code>"notarize": false</code>. electron-builder tự notarize
+        khi thấy <code>APPLE_ID</code> /
+        <code>APPLE_APP_SPECIFIC_PASSWORD</code> / <code>APPLE_TEAM_ID</code>,
+        thiếu thì bỏ qua và chỉ cảnh báo.
+      </p>
+      <h3><code>.github/workflows/release.yml</code></h3>
+      <p>Job macOS có hai bước:</p>
+      <ol>
+        <li>
+          <strong>Import the Developer ID certificate</strong>: giải mã
+          <code>MAC_CSC_LINK</code>, tạo một keychain riêng với mật khẩu ngẫu
+          nhiên, import <code>.p12</code>, chạy
+          <code>set-key-partition-list</code>, thêm keychain vào danh sách tìm
+          kiếm, in identity ra log, rồi ghi <code>MAC_SIGNING=true</code>. Không
+          có secret thì bước này bỏ qua và job build bản không ký.
+        </li>
+        <li>
+          <strong>Build installers</strong>:
+          <code
+            >CSC_IDENTITY_AUTO_DISCOVERY=${{ env.MAC_SIGNING == 'true' }}</code
+          >
+          cùng ba biến <code>APPLE_*</code>, rồi chạy
+          <code>electron-builder --mac</code>.
+        </li>
+      </ol>
+      <p>
+        Chứng chỉ được tự import thay vì truyền qua <code>CSC_LINK</code>, vì
+        keychain tạm của electron-builder bị lỗi trên runner (xem
+        <a href="#trouble">mục 9</a>). Cách này cũng tránh được việc
+        electron-builder dùng <code>CSC_LINK</code> để ký Windows bằng một chứng
+        chỉ không phải Authenticode. Windows và Linux vẫn không ký.
+      </p>
+
+      <h2 id="run">8. Chạy và kiểm tra</h2>
+      <ol>
+        <li>Commit, rồi <code>git push</code>.</li>
+        <li>
+          Vào Actions › <strong>Release</strong> ›
+          <strong>Run workflow</strong> và chọn branch. Lần chạy tay chỉ build,
+          không publish. Publish thật chỉ chạy khi push tag <code>v*</code>.
+        </li>
+        <li>Xem log job <code>package (macos)</code>:</li>
+      </ol>
+      <div class="ok">
+        <p>
+          <strong>Bước import:</strong> <code>1 valid identities found</code> và
+          <code>Developer ID Application: … (TEAM_ID)</code>
+        </p>
+        <p>
+          <strong>Bước build:</strong>
+          <code>signing … identityName=Developer ID Application: …</code>, sau
+          đó là <code>notarization successful</code> (thường mất 2–10 phút)
+        </p>
+      </div>
+      <p>
+        Kiểm tra trên một máy Mac, sau khi tải <code>.dmg</code> từ artifact và
+        cài app:
+      </p>
+      <pre><code>codesign --verify --deep --strict --verbose=2 "/Applications/Vey.app"
+spctl --assess --type execute --verbose "/Applications/Vey.app"
+xcrun stapler validate "/Applications/Vey.app"</code></pre>
+      <p>
+        <code>spctl</code> phải báo <code>accepted</code> và
+        <code>source=Notarized Developer ID</code>.
+      </p>
+
+      <h2 id="trouble">9. Lỗi thường gặp</h2>
+      <table>
+        <tr>
+          <th>Lỗi</th>
+          <th>Nguyên nhân và cách xử lý</th>
+        </tr>
+        <tr>
+          <td>
+            <code
+              >set-key-partition-list … SecKeychainUnlock: The user name or
+              passphrase you entered is not correct</code
+            >
+          </td>
+          <td>
+            Lỗi ở keychain tạm của electron-builder khi truyền chứng chỉ qua
+            <code>CSC_LINK</code>. Cách xử lý là tự import chứng chỉ vào
+            keychain riêng trong một bước trước, như workflow hiện tại.
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <code>security import</code> báo
+            <code>MAC verification failed</code>
+          </td>
+          <td>
+            <code>MAC_CSC_KEY_PASSWORD</code> không khớp với file
+            <code>.p12</code>, hoặc <code>MAC_CSC_LINK</code> bị dán thiếu hay
+            thừa ký tự. Copy lại bằng <code>clip</code>.
+          </td>
+        </tr>
+        <tr>
+          <td><code>0 valid identities found</code></td>
+          <td>
+            Chứng chỉ không khớp với private key (ví dụ ghép nhầm một
+            <code>devid.key</code> khác), hoặc chọn sai loại chứng chỉ ở bước 3.
+          </td>
+        </tr>
+        <tr>
+          <td>Notarize báo sai thông tin đăng nhập</td>
+          <td>
+            Đã lưu cái nhãn thay vì chuỗi mật khẩu, hoặc mật khẩu được tạo từ
+            một Apple ID khác với <code>APPLE_ID</code>, hoặc sai
+            <code>APPLE_TEAM_ID</code>.
+          </td>
+        </tr>
+        <tr>
+          <td>Notarize trả về <code>Invalid</code></td>
+          <td>
+            Xem log chi tiết bằng
+            <code>xcrun notarytool log &lt;submission-id&gt;</code>. Thường là
+            có binary chưa được ký, hoặc thiếu hardened runtime.
+          </td>
+        </tr>
+        <tr>
+          <td>App mở ra crash ngay sau khi sign</td>
+          <td>
+            Thiếu entitlements (xem mục 7). Kiểm tra bằng
+            <code>codesign -d --entitlements - "/Applications/Vey.app"</code>.
+          </td>
+        </tr>
+      </table>
+
+      <h2 id="after">10. Sau khi xong</h2>
+      <ul>
+        <li>
+          Cất <code>devid.key</code>, <code>devid.p12</code> và mật khẩu export
+          vào trình quản lý mật khẩu, rồi xoá các bản trong
+          <code>~/apple-signing</code>.
+        </li>
+        <li>
+          Không bao giờ dán secret vào chat, issue hay commit. Lỡ lộ thì thu hồi
+          app-specific password và tạo mật khẩu mới, rồi bấm Update secret trên
+          GitHub.
+        </li>
+        <li>
+          Chứng chỉ Developer ID có hạn khoảng 5 năm. Khi gia hạn thì làm lại từ
+          bước 2 và cập nhật <code>MAC_CSC_LINK</code> và
+          <code>MAC_CSC_KEY_PASSWORD</code>.
+        </li>
+        <li>
+          Khi app đã được ký, các chỗ trong repo còn ghi là bản build "unsigned"
+          nên được cập nhật: README, cảnh báo quarantine trong
+          <code>install.sh</code>, <code>updater.ts</code>,
+          <code>docs/design.md</code> § Updating.
+        </li>
+      </ul>
+    </main>
+  </body>
+</html>

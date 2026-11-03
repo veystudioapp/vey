@@ -1,0 +1,163 @@
+/** The composer, its toolbar and dialogs, and the cards that stop a turn. */
+export const chat = {
+  composer: {
+    placeholder: "Ask about this checkout…",
+    resize: "Resize the composer",
+    resizeHint: "Drag to resize, double-click to reset",
+    leaveSelectionOut: "Leave the selection out",
+    addToMessage: "Add to this message",
+    attachFile: "Attach file",
+    mentionFile: "Mention a file…",
+    runCommand: "Run a command…",
+    mcpServers: "MCP servers…",
+    stop: "Stop",
+    send: "Send",
+    sendNext: "Send next",
+    contextWindow: "Context window: {label} before auto-compacting",
+    noBreakdown: "No breakdown was reported.",
+    thisApp: "this app",
+    askingCommands: "Asking claude what it can run…",
+    noCommand: "No command matches that.",
+  },
+  model: {
+    inherit: "Inherit",
+    inheritDetail: "Whatever your own `claude` is set to",
+    model: "Model",
+    title: "Which model answers and how much thinking it gets",
+    new: "NEW",
+    reload: "Reload models",
+    reloading: "Asking claude…",
+  },
+  effort: {
+    low: "Low",
+    medium: "Medium",
+    high: "High",
+    xhigh: "Very high",
+    max: "Max",
+  },
+  permission: {
+    plan: {
+      label: "Plan",
+      short: "Plan",
+      detail: "Reads, and answers with a plan. Changes nothing.",
+    },
+    read: {
+      label: "Read only",
+      short: "Read",
+      detail: "Reads and answers. No edits, no shell.",
+    },
+    ask: {
+      label: "Ask",
+      short: "Ask",
+      detail:
+        "Asks exactly what the claude CLI would, under your own settings.",
+    },
+    edits: {
+      label: "Edits",
+      short: "Edits",
+      detail: "Edits files and runs commands in this checkout.",
+    },
+    full: {
+      label: "Full access",
+      short: "Full",
+      detail: "Nothing is asked, including tools this app has not listed.",
+    },
+  },
+  concise: {
+    label: "Concise",
+    title:
+      "Shorter replies: no preamble, no recap after tool work. Fewer output tokens.",
+  },
+  profile: {
+    title: "Which CLAUDE_CONFIG_DIR this chat's turns run under",
+    heading: "Account for this chat",
+    defaultAccountFallback:
+      "Whichever your own `claude` is already signed into",
+    noDirectory: "No directory set",
+  },
+  limit: {
+    continue: "Continue",
+    continueWith: "Continue with {name}",
+  },
+  ask: {
+    allow: "Allow",
+    alwaysAllow: "Always allow",
+    deny: "Deny",
+    pickMany: "Pick as many as apply",
+    typeOwn: "Type your own answer",
+    typePlaceholder: "Type an answer…",
+    answer: "Answer",
+  },
+  images: {
+    open: "Open {label}",
+    takeOut: "Take {label} out",
+  },
+  planUsage: {
+    title: "Plan usage",
+    usage: "Usage",
+    noWindows: "Claude reported no usage windows for this plan.",
+    meterTitle: "{window} limit: {percent} used",
+    meterTitleReset: "{window} limit: {percent} used, {reset}",
+    window: {
+      fiveHour: "5-hour",
+      sevenDay: "7-day",
+      sevenDayOpus: "7-day Opus",
+      sevenDaySonnet: "7-day Sonnet",
+      sevenDayApps: "7-day apps",
+    },
+    short: {
+      fiveHour: "5h",
+      sevenDay: "7d",
+    },
+    resetsNow: "resets now",
+    resetsInMinutes: "resets in {minutes}m",
+    resetsInHours: "resets in {hours}h",
+    resetsInHoursMinutes: "resets in {hours}h {minutes}m",
+    resetsAt: "resets {day} {time}",
+    reached: "{who} reached its {window} limit",
+    stopped: "Stopped. {what}",
+    stoppedReset: "Stopped. {what} · {reset}",
+  },
+  mcp: {
+    servers: "MCP servers",
+    serversHeading: "Servers",
+    asking: "Asking `claude` what it has…",
+    noneTitle: "No MCP servers here",
+    noneBody:
+      "Add one with `claude mcp add`, or connect one to your account on claude.ai, then Refresh.",
+    removeTitle: "Remove “{name}”?",
+    removeBody:
+      "This runs `claude mcp remove` against your own `claude` configuration, so it goes from every chat here *and* from your terminal. There is no undo — adding it back means `claude mcp add`. To keep it installed but out of this chat, use the switch instead.",
+    removeBodyScoped:
+      "This runs `claude mcp remove` against your own `claude` {scope} configuration, so it goes from every chat here *and* from your terminal. There is no undo — adding it back means `claude mcp add`. To keep it installed but out of this chat, use the switch instead.",
+    chip: "MCP · {count} off",
+    chipTitle: "Some MCP tools are switched off in this chat",
+    allow: "Allow {name} in this chat",
+    tools: "{count} tools",
+    tools_one: "{count} tool",
+    allOff: "all off",
+    someOff: "{count} off",
+    tokensTitle:
+      "Estimated from tool names and descriptions at ~4 characters per token. Parameter schemas are not in the listing, so the real figure is higher.",
+    tokensPerTurn: "≥ ~{tokens} tokens/turn",
+    authorize: "Authorize on claude.ai",
+    signInCli:
+      "Sign in with `/mcp` in a `claude` session — the dock’s Terminal will do — then Refresh.",
+    noTools: "This server offers no tools.",
+    noToolsYet: "This server offers no tools until it connects.",
+    filterPlaceholder: "Filter {count} tools…",
+    filterLabel: "Filter tools",
+    noMatch: "No tool matches “{query}”.",
+    configNote:
+      "In your *{scope}* `claude` config. Removing it takes it out of every chat and your terminal.",
+    removeServer: "Remove server",
+    state: {
+      connected: "Connected",
+      failed: "Failed",
+      needsAuth: "Needs sign-in",
+      pending: "Connecting",
+      disabled: "Disabled",
+      unknown: "Unknown",
+    },
+  },
+}

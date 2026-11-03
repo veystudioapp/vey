@@ -1,0 +1,5 @@
+---
+layout: install-page
+---
+
+<Install />

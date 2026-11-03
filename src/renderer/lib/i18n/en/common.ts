@@ -1,0 +1,23 @@
+/** Words used across the window — buttons and states with no one owner. */
+export const common = {
+  cancel: "Cancel",
+  close: "Close",
+  save: "Save",
+  remove: "Remove",
+  rename: "Rename",
+  delete: "Delete",
+  reload: "Reload",
+  refresh: "Refresh",
+  copy: "Copy",
+  copied: "Copied",
+  open: "Open",
+  more: "More",
+  back: "Back",
+  next: "Next",
+  done: "Done",
+  retry: "Retry",
+  checking: "Checking…",
+  loading: "Loading…",
+  search: "Search",
+  settings: "Settings",
+}

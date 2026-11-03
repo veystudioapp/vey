@@ -1,0 +1,954 @@
+import { useCallback, useEffect, useLayoutEffect, useState } from "react"
+import { PanelRightClose, PanelRightOpen, Search } from "lucide-react"
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+  usePanelRef,
+} from "@/components/ui/resizable"
+import { cn } from "@/lib/utils"
+
+import { usePalette } from "@/lib/palette"
+import { useFiles } from "@/lib/files/store"
+import { watchExpandedDirectories } from "@/lib/files/watch"
+import {
+  reconcileScope,
+  rememberActiveTab,
+  useActiveTabId,
+  useHasOpenTabs,
+} from "@/lib/panels"
+import {
+  isEditingRichText,
+  isSearchShortcut,
+  isStudioShortcut,
+  isNewTerminalShortcut,
+  isTerminalShortcut,
+} from "@/lib/shortcuts"
+import { useShells } from "@/lib/shell/store"
+import { applyAppearance } from "@/lib/appearance"
+import { applyLanguage, useT } from "@/lib/i18n"
+import { backgroundStyle, useAppBackground } from "@/lib/app-background"
+import { usePlugins } from "@/lib/plugins/store"
+import { useSettings } from "@/lib/settings"
+import { useDock } from "@/lib/dock"
+import { useStudio, type Pane } from "@/lib/store"
+import { useProjects } from "@/lib/projects"
+import { useWorkspaceSearch } from "@/lib/workspace-search"
+import { useClaudeProfiles } from "@/lib/chat/claude-profiles"
+import { useBrowser } from "@/lib/browser/store"
+import { useChats } from "@/lib/chat/store"
+import { badgeCount } from "@/lib/chat/unread"
+import { Dock } from "./dock"
+import { NavRail } from "./nav-rail"
+import { ProjectDialogs } from "./project/project-actions"
+import { WorkspaceSidebar } from "./workspace-sidebar"
+import { ChatPane } from "./chat/chat-pane"
+import { FileTree } from "./files/file-tree"
+import { IconButton } from "./icon-button"
+import { ChangesPane } from "./files/changes-pane"
+import { FileWorkspace } from "./files/file-workspace"
+import { AddFolderDialog } from "./add-folder-dialog"
+import { UnsavedDialog } from "./files/unsaved-dialog"
+import { ClaudeSetup, useClaudeSetup } from "./claude-setup"
+import { CommandPalette } from "./command-palette"
+import { PluginNotices } from "./plugin-notices"
+import { NothingOpen } from "./nothing-open"
+import { OnboardingTour } from "./onboarding-tour"
+import { FeedbackDialog } from "./feedback-dialog"
+import { WhatsNewDialog } from "./whats-new-dialog"
+import { SettingsDialog } from "./settings-dialog"
+import { SystemBar } from "./system-bar"
+import {
+  Splash,
+  splashElapsed,
+  SPLASH_ASSEMBLE_MS,
+  SPLASH_FADE_MS,
+} from "./splash"
+import { HAS_TRAFFIC_LIGHTS, IS_MAC, TitleBarDragStrip } from "./title-bar"
+import { WorkspaceTabs } from "./workspace-tabs"
+
+/** What each pane on the rail shows. Built here rather than inline so the
+ * stack below is a list of panes and nothing else. */
+function paneView(pane: Pane) {
+  switch (pane) {
+    case "files":
+      return <FileWorkspace />
+    case "changes":
+      return <ChangesPane />
+    case "chat":
+      return <ChatPane />
+  }
+}
+
+/** How far the launch screen has got: still assembling, fading out over the
+ * workbench, or gone. */
+type Launch = "splash" | "closing" | "done"
+
+/** The longest the launch screen holds out for the `claude` check. Past a
+ * login shell's usual second or two, and well short of its 10s timeout. */
+const SETUP_WAIT_MS = 4000
+
+export function Studio() {
+  const workspaceLoaded = useStudio((state) => state.loaded)
+  const storageError = useStudio((state) => state.storageError)
+  const loaded = workspaceLoaded
+
+  const [launch, setLaunch] = useState<Launch>("splash")
+
+  // Everything the studio holds belongs to the one workspace, so this is the
+  // only moment it is read. The ones here rather than in their own panels are
+  // the ones that matter before the panel is opened: a file is the kind of
+  // thing whose *tab* can be restored onto a pane whose list is not the one
+  // showing — the strip cannot draw a tab for something it has never read.
+  //
+  // The databases used to be read here too, for the tree the app started on.
+  // Nothing in this window lists them any more, and reading them put the
+  // Database panel's remembered tabs back into a strip that no longer draws
+  // them (`PANES`); `DatabaseWindow` does its own read.
+  useEffect(() => {
+    void useStudio.getState().init()
+    void useSettings.getState().restore()
+    void useFiles.getState().restore()
+    void useProjects.getState().restore()
+    void useChats.getState().restore()
+    void useClaudeProfiles.getState().refresh()
+    void useAppBackground.getState().restore()
+    // The studio's window only: a popped-out chat is a second page, and a
+    // plugin started in both would answer every event twice.
+    void usePlugins.getState().restore()
+  }, [])
+
+  // A chat's turn runs in the main process and outlives the
+  // pane being switched away from, so its lines are subscribed to here.
+  useEffect(() => useChats.getState().listen(), [])
+  // A chat's browser opened by its own `claude` — the studio's window only,
+  // since a popped-out chat has no browser panel.
+  useEffect(() => useBrowser.getState().listen(), [])
+
+  // The dock icon's red number. Here rather than in main because `unread` is
+  // this window's — main knows a chat went quiet but not whether anybody has
+  // looked at it since — and here rather than in `ChatWindow` because a
+  // popped-out chat keeps a store of its own, and two senders would fight.
+  useEffect(() => {
+    let shown = -1
+    const sync = ({ unread, asks }: ReturnType<typeof useChats.getState>) => {
+      const count = badgeCount(unread, asks)
+      if (count === shown) return
+      shown = count
+      void window.desktop.setBadgeCount(count)
+    }
+    sync(useChats.getState())
+    return useChats.subscribe(sync)
+  }, [])
+
+  // The appearance settings, written onto `<html>` as they change — here
+  // rather than in the dialog that edits them, so a restored setting is
+  // applied before anybody has opened Settings.
+  useEffect(() => {
+    applyAppearance(useSettings.getState())
+    return useSettings.subscribe(applyAppearance)
+  }, [])
+
+  useEffect(() => {
+    applyLanguage(useSettings.getState().language)
+    return useSettings.subscribe((state) => applyLanguage(state.language))
+  }, [])
+  const t = useT()
+
+  /** The first-launch tour: once the launch screen has gone and the settings
+   * have said whether it has been seen. Read here rather than in `Workbench`
+   * because `launch` is this component's. */
+  const settingsLoaded = useSettings((state) => state.loaded)
+  const onboarded = useSettings((state) => state.onboarded)
+  const setOnboarded = useSettings((state) => state.setOnboarded)
+  /** Whether there is a `claude` to chat with — see `ClaudeSetup`. Its screen
+   * goes first and the tour waits on it, since a tour of chats is no use to a
+   * machine that cannot have one yet. */
+  const setup = useClaudeSetup()
+  const [setupClosed, setSetupClosed] = useState(false)
+  const closeSetup = useCallback(() => setSetupClosed(true), [])
+  // The first launch walks the whole screen, welcome included, even with
+  // `claude` installed and signed in; later ones only stop for what is missing.
+  const firstRun = settingsLoaded && !onboarded
+  const setupNeeded = setup.step === "install" || setup.step === "signIn"
+  // Mounted under the splash's fade rather than after it, so the launch screen
+  // crosses straight to this one instead of showing the workbench for a frame
+  // between them.
+  const settingUp =
+    launch !== "splash" && !setupClosed && (firstRun || setupNeeded)
+
+  /*
+   * The splash waits on the `claude` check as well as the manifest: the check
+   * goes through a login shell and usually lands a second or two after the
+   * manifest, which used to be long enough to show the studio and then cover it
+   * with the setup screen. Capped, because that shell can take its whole
+   * timeout — past `SETUP_WAIT_MS` the workbench opens and the setup screen, if
+   * it is needed, comes over it as it used to.
+   */
+  const [setupWaitedOut, setSetupWaitedOut] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setSetupWaitedOut(true), SETUP_WAIT_MS)
+    return () => clearTimeout(timer)
+  }, [])
+  const ready =
+    loaded && settingsLoaded && (setup.step !== "checking" || setupWaitedOut)
+  const touring =
+    launch === "done" &&
+    settingsLoaded &&
+    !onboarded &&
+    setup.step !== "checking" &&
+    !settingUp
+
+  /*
+   * The manifest is a small file on a local disk and usually lands well inside
+   * the time the launch screen takes to draw itself, so the wait here is the
+   * opposite of the usual one: the workbench is held to the end of the
+   * sequence rather than the sequence being held open for the workbench. A
+   * splash cut off a third of the way through does not read as a fast app, it
+   * reads as a glitch.
+   *
+   * Two states rather than one because this is a crossfade and not a cut: the
+   * workbench mounts when the fade starts and is on screen behind the last of
+   * it.
+   *
+   * **`loaded` and nothing else.** Both timers are set once here, and `launch`
+   * must stay out of the dependencies: it is what the first timer changes, so an
+   * effect watching it re-ran on its own `setLaunch("closing")`, cleared the
+   * `done` timer it had just been holding, and then returned early because
+   * `launch` was no longer `"splash"`. The app sat in `"closing"` for the rest of
+   * the run — invisibly, since the splash is transparent by then, except that its
+   * drag region stayed over the whole title bar and every button up there stopped
+   * taking clicks. Watching the thing you are about to set is the whole of the
+   * bug.
+   */
+  useEffect(() => {
+    if (!ready) return
+
+    const left = Math.max(0, SPLASH_ASSEMBLE_MS - splashElapsed())
+    const toClosing = setTimeout(() => setLaunch("closing"), left)
+    const toDone = setTimeout(() => setLaunch("done"), left + SPLASH_FADE_MS)
+    return () => {
+      clearTimeout(toClosing)
+      clearTimeout(toDone)
+    }
+  }, [ready])
+
+  // A failure has nothing to wait for and nothing to celebrate: it replaces
+  // the launch screen outright rather than fading in behind it.
+  if (storageError) return <StorageError message={storageError} />
+
+  return (
+    <>
+      {launch !== "splash" && <Workbench />}
+      {/* Ahead of the splash, so the splash fades out over it. */}
+      {settingUp && (
+        <ClaudeSetup
+          firstRun={firstRun}
+          step={setup.step}
+          versions={setup.versions}
+          checking={setup.checking}
+          onRecheck={() => void setup.recheck()}
+          onDone={closeSetup}
+        />
+      )}
+      {launch !== "done" && (
+        <Splash
+          closing={launch === "closing"}
+          status={loaded ? t("onboarding.lookingForClaude") : undefined}
+        />
+      )}
+      {touring && <OnboardingTour onDone={() => setOnboarded(true)} />}
+      <WhatsNewDialog
+        ready={
+          launch === "done" &&
+          setup.step !== "checking" &&
+          !settingUp &&
+          !touring
+        }
+      />
+      <FeedbackDialog />
+      {/* The launch screen has nothing clickable, so the top of the window is
+          its drag handle. Owned here rather than by the splash because it has to
+          outlive it: unmounting a drag region leaves macOS holding it, over the
+          title bar the workbench draws in the same place — see
+          `TitleBarDragStrip`. */}
+      <TitleBarDragStrip active={launch !== "done"} />
+    </>
+  )
+}
+
+function Workbench() {
+  const pane = useStudio((state) => state.pane)
+  const hasOpenTabs = useHasOpenTabs()
+  const activeTabId = useActiveTabId(pane)
+  const backgroundImage = useAppBackground((state) => state.image)
+
+  const [adding, setAdding] = useState(false)
+  // Every way to `Add project` comes through here.
+  const addProject = useCallback(() => setAdding(true), [])
+  /** The Settings dialog — the application menu's ⌘, and nothing else, since
+   * a preference is not a thing the workspace holds a row for. */
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  /** Whether the dock's terminals are on screen: the rail's button, `⌃\``, and
+   * the chevron in the dock's own strip. */
+  const dockOpen = useDock((state) => state.open)
+  const toggleDock = useDock((state) => state.toggle)
+  /** The left column, and its toggle in the title bar. */
+  const projectSidebar = useProjects((state) => state.sidebar)
+  const toggleProjectSidebar = useProjects((state) => state.toggleSidebar)
+  /** Whether the Explorer panel is showing at all — `⌘B`, the View menu, or
+   * dragging its handle shut. */
+  const sidebar = useStudio((state) => state.sidebar)
+  const toggleSidebar = useStudio((state) => state.toggleSidebar)
+  /** The panels built so far, in the order they were first shown; see the
+   * stack below. */
+  const [mounted, setMounted] = useState<Pane[]>([])
+
+  // The panel on screen — or none, which `NothingOpen` answers for the pane
+  // whose tab went.
+  //
+  // A panel is drawn only when it has a tab to draw: each one used to answer
+  // "nothing selected" for itself, which meant whoever opened the app to read
+  // a request was told to pick a table, because `database` is the pane a fresh
+  // launch starts on. Now the workbench says it once, in terms of the strip,
+  // which is what the user is actually looking at.
+  const shown = hasOpenTabs && activeTabId ? pane : null
+
+  // Adjusted during the render that first shows a panel rather than in an
+  // effect afterwards: an effect would leave one painted frame with the pane
+  // empty, and this is the list that mounts what belongs in it.
+  if (shown && !mounted.includes(shown)) setMounted([...mounted, shown])
+
+  // The File menu is a second way to reach the same dialog — and the only one
+  // left when Explorer is taken off the rail. It runs in the main process and
+  // cannot open a dialog itself, so it names the command instead.
+  useEffect(
+    () =>
+      window.desktop.onMenuCommand((command) => {
+        if (command === "add-folder") addProject()
+        if (command === "open-settings") setSettingsOpen(true)
+        if (command === "toggle-sidebar") toggleSidebar()
+        if (command === "toggle-terminal") toggleDock()
+      }),
+    [toggleSidebar, toggleDock, addProject]
+  )
+
+  // The tree follows the disk for as long as the workbench is up — here rather
+  // than in the Explorer panel, which the rail unmounts every time somebody
+  // reads another one.
+  useEffect(() => watchExpandedDirectories(), [])
+
+  /*
+   * The strip is per checkout, so moving the checkout may leave the pane drawing
+   * something the strip no longer holds — see `reconcileScope`.
+   *
+   * Here rather than inside `setActive`, which is where it belongs by rights: a
+   * store that reached into `lib/panels.ts` would be a cycle, since that module
+   * reads this one's context to work out what is in scope at all. So the
+   * workbench watches the field instead, which is the same thing one frame
+   * later and in the layer that is allowed to know about both.
+   */
+  const activeFolderId = useProjects((state) => state.activeFolderId)
+  // Ahead of the reconcile below, so that coming back to a project can land on
+  // the tab it was last showing rather than its first.
+  useEffect(() => {
+    if (activeTabId !== null) rememberActiveTab(activeTabId)
+  }, [activeTabId, activeFolderId])
+  // And when the strip goes back to one project: the pane may be on a tab of
+  // another one that it was showing a moment ago.
+  const allProjectTabs = useSettings((state) => state.allProjectTabs)
+  useEffect(() => {
+    reconcileScope()
+  }, [activeFolderId, allProjectTabs])
+
+  /*
+   * And whenever the strip has tabs while the pane has none to draw.
+   *
+   * Moving the project and closing from the strip (`fillPane`) were the only
+   * two ways back, and they are not the only ways in: a launch restoring the
+   * pane as `chat` while only files came back, a folder leaving the workspace
+   * and pruning the file the pane was on, a panel's own `close` called from
+   * outside the strip. Each left a full strip over `NothingOpen`, which reads
+   * as the tabs being dead. Said once here, as the invariant, rather than at
+   * each of those and the next one.
+   */
+  useEffect(() => {
+    if (hasOpenTabs && activeTabId === null) reconcileScope()
+  }, [hasOpenTabs, activeTabId])
+
+  /*
+   * The sidebar's own panel, collapsed rather than unmounted.
+   *
+   * `collapse()` is the only way to take a `ResizablePanel`'s space back — it
+   * has no `collapsed` prop — and it is the right one here anyway: the panel
+   * remembers the width it was dragged to and gives it back on `expand()`,
+   * where a sidebar taken out of the group would come back at its default. The
+   * sidebar it holds is one of five lists, and unmounting is the rail's
+   * business, not this.
+   *
+   * **`useLayoutEffect`, and that is the flicker.** These run off a store the
+   * button flips, so the render that hides the column's contents lands one
+   * paint *before* the panel is told to narrow — and the browser drew that
+   * paint: a frame of an empty column at its full width, then the collapse.
+   * Moving the hiding to the panel's own width only turned the flash around,
+   * into a frame of contents clipped to the collapsing width. There is no
+   * order of the two that works, because the two were in different frames at
+   * all. A layout effect runs after the DOM is updated and *before* the paint,
+   * and the `collapse()` in it re-renders synchronously, so both land in the
+   * one frame.
+   */
+  const sidebarPanel = usePanelRef()
+  useLayoutEffect(() => {
+    if (sidebar) sidebarPanel.current?.expand()
+    else sidebarPanel.current?.collapse()
+  }, [sidebar, sidebarPanel])
+
+  /** The same for the left column, which collapses on its own button. */
+  const projectPanel = usePanelRef()
+  useLayoutEffect(() => {
+    if (projectSidebar) projectPanel.current?.expand()
+    else projectPanel.current?.collapse()
+  }, [projectSidebar, projectPanel])
+
+  /**
+   * And the dock, which is collapsed rather than unmounted — the reason being
+   * the shell in it. A pty taken out of the tree ends; it does not hide. The
+   * dock used to unmount, which was fine while it held a conversation the main
+   * process owned and a log, and became a bug the moment closing it would have
+   * killed whatever was running in the Terminal tab.
+   */
+  const dockPanel = usePanelRef()
+  useLayoutEffect(() => {
+    if (dockOpen) dockPanel.current?.expand()
+    else dockPanel.current?.collapse()
+  }, [dockOpen, dockPanel])
+
+  /*
+   * `⌘B` — the editors' shortcut for the sidebar, and the View menu's item.
+   *
+   * On the capture phase like the studio's other three, so a focused editor
+   * cannot swallow it, with the one exception the letter makes: in a rich-text
+   * editor `⌘B` is bold and stays bold (`isEditingRichText`). Nothing else on
+   * screen wants the key — the code editor has no binding for it, and off macOS a
+   * terminal is refused by `isStudioShortcut` itself, where `Ctrl+B` is tmux's
+   * prefix and readline's backward-char.
+   */
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!isStudioShortcut(event, "b")) return
+      if (isEditingRichText(event.target)) return
+
+      event.preventDefault()
+      toggleSidebar()
+    }
+
+    window.addEventListener("keydown", onKeyDown, { capture: true })
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true })
+    }
+  }, [toggleSidebar])
+
+  // `⇧⌘F` — the left column on Search, caret in the field. Shows rather than
+  // toggles: the key is somebody about to type a query, not closing one.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!isSearchShortcut(event)) return
+      event.preventDefault()
+      useProjects.getState().showView("search")
+      useWorkspaceSearch.getState().focus()
+    }
+
+    window.addEventListener("keydown", onKeyDown, { capture: true })
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true })
+    }
+  }, [])
+
+  /*
+   * `⌃\`` — the dock's terminals, the editors' key for them, and the View
+   * menu's item.
+   *
+   * On the capture phase for the reason the others are, and one more: this is
+   * the only one of them meant to work *inside* the terminal, and xterm would
+   * otherwise hand the key to the pty before the page had it. `⌃⇧\`` beside
+   * it opens another shell, which also shows the dock.
+   */
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (isNewTerminalShortcut(event)) {
+        event.preventDefault()
+        useShells.getState().add()
+        return
+      }
+      if (!isTerminalShortcut(event)) return
+
+      event.preventDefault()
+      toggleDock()
+    }
+
+    window.addEventListener("keydown", onKeyDown, { capture: true })
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, { capture: true })
+    }
+  }, [toggleDock])
+
+  /*
+   * The panel on screen, and the notice that stands in for it.
+   *
+   * A value rather than inline JSX, which is what it was when the tab strip had
+   * two placements and this had to go in either of two boxes. It is one box now,
+   * and what the name still buys is that the reader meets the pane's own
+   * question — which panel, or the notice — clear of the panels around it.
+   *
+   * `overflow-hidden` because the panels below are absolutely positioned and so
+   * do not clip: a panel that forgot to scroll its own content would otherwise
+   * spill past this box and be scrolled by an ancestor, which takes the tab
+   * strip off the edge of the window with it.
+   */
+  const paneContent = (
+    <div className="flex h-full min-h-0 min-w-0 flex-col" data-tour="composer">
+      <div className="relative min-h-0 flex-1 overflow-hidden">
+        {/*
+        Every panel is hidden rather than unmounted, and built the first time it
+        is shown — a panel nobody has opened is a connection nobody is reading.
+
+        Everything they hold that their store does not is lost on a switch, and
+        a panel switched away from is coming back. Leaving Database for API
+        and returning gave a result grid scrolled back to the top, a SQL editor
+        with no undo history and the split at its default height.
+
+        `invisible`, not `hidden`: `display: none` destroys the scrolling boxes
+        inside, which would put that grid back at the top by another route —
+        and it is what the dock stacks its own shells with.
+      */}
+        {mounted.map((name) => (
+          <div
+            key={name}
+            className={cn("absolute inset-0", name !== shown && "invisible")}
+          >
+            {paneView(name)}
+          </div>
+        ))}
+
+        {/* One notice for the whole workbench, rather than each panel's own:
+          nothing open at all, or tabs open with none of them on screen. */}
+        {!shown && (
+          <div className="absolute inset-0">
+            <NothingOpen />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return (
+    /*
+      The window is a canvas with cards on it: the rail, the projects, the pane
+      with the dock under it, and the Explorer, each its own rounded box with a
+      gap of canvas between — the gaps are the resize handles. The title bar runs
+      the whole width above all of them.
+
+      There is no crumb naming the project on screen: the projects column marks
+      it, and the branch is the status bar's.
+    */
+    <div
+      className="flex h-svh flex-col overflow-hidden bg-sidebar"
+      // With a picture, the cards go translucent (`studio-card` in
+      // `globals.css`) so it shows through them as well as in the gaps.
+      data-app-background={backgroundImage ? "" : undefined}
+      style={backgroundStyle(backgroundImage)}
+    >
+      <WindowTitleBar />
+
+      <div className="flex min-h-0 flex-1 gap-1.5 px-1.5">
+        <NavRail
+          onOpenSettings={() => setSettingsOpen(true)}
+          onAddFolder={addProject}
+        />
+
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="min-w-0 flex-1"
+        >
+          {/* The workspace's own column: its projects, and the chats under
+              each. See `SIDEBAR_SECTIONS` in `lib/projects.ts`. */}
+          <ResizablePanel
+            defaultSize={228}
+            minSize={168}
+            maxSize={360}
+            collapsible
+            // Collapsed to nothing: the way back is the rail's first button,
+            // which is on screen whatever this column is doing.
+            collapsedSize={0}
+            panelRef={projectPanel}
+            // `Panel` wraps its children in a scroll container (`overflow:
+            // auto`, inline), and a collapse lands on a fractional pixel, which
+            // shows up as a scrollbar.
+            style={{ overflow: "hidden" }}
+            onResize={(size, _id, previous) => {
+              // Undefined on mount is the panel reporting the width it was
+              // handed, not a drag — read as one, a launch that remembered a
+              // closed column would reopen it. Same trap as the panels' below.
+              if (previous === undefined) return
+
+              const shown = size.inPixels > 0
+              if (shown !== useProjects.getState().sidebar) {
+                toggleProjectSidebar()
+              }
+            }}
+          >
+            <div className={cn(CARD, "@container")}>
+              {/* Hidden while the column is shutting, and **hidden by a
+                  container query** too — see the Explorer's, which carries the
+                  argument. Not unmounted: the column holds the folding state
+                  and the project the workbench is scoped to. */}
+              <div
+                className={cn(
+                  "h-full overflow-hidden @max-[100px]:pointer-events-none @max-[100px]:opacity-0",
+                  // The store for a click, the query for a drag.
+                  !projectSidebar && "pointer-events-none opacity-0"
+                )}
+              >
+                <WorkspaceSidebar onAddFolder={addProject} />
+              </div>
+            </div>
+          </ResizablePanel>
+
+          {/* Hidden with the column, unlike the Explorer's: a shut column is
+              nothing at all, and a handle left beside it would be a second gap
+              of canvas against the rail. */}
+          <Gap className={cn(!projectSidebar && "hidden")} />
+
+          {/* Everything about the one checkout: the pane with the dock under
+              it, and the Explorer. Its minimum is the two columns inside it
+              added up. */}
+          <ResizablePanel minSize={560}>
+            <ResizablePanelGroup
+              orientation="horizontal"
+              className="min-w-0 flex-1"
+            >
+              {/*
+                The pane, with the dock under it and spanning the whole width
+                of it.
+
+                The dock used to be a panel inside the Explorer column, stacked
+                under the tree the way Conductor stacks its own Run/Terminal
+                under its file list. Here the Explorer is on the right and
+                capped at 520px, which made a shell 60-odd columns wide — under
+                the 80 that virtually every CLI's output is written for — and
+                stole the tree's height every time the dock opened. So the dock
+                moved and the Explorer went back to being one full-height list.
+              */}
+              <ResizablePanel minSize={280}>
+                <ResizablePanelGroup orientation="vertical">
+                  {/* Enough to keep an editor readable when the dock has been
+                      dragged tall. */}
+                  <ResizablePanel minSize={200}>
+                    <div className={cn(CARD, "flex min-w-0 flex-col")}>
+                      {/* Outside the panel rather than inside one, which is
+                          what keeps a file open on screen while a chat is the
+                          one being looked at. */}
+                      <WorkspaceTabs pane={pane} />
+                      {paneContent}
+                    </div>
+                  </ResizablePanel>
+
+                  {/* Hidden with the dock, as the projects column's is: a shut
+                      dock is nothing at all, and a handle left under the pane
+                      would be a strip of canvas with no card below it. */}
+                  <Gap className={cn(!dockOpen && "hidden")} />
+
+                  {/* Collapsed rather than unmounted, and that is not tidiness:
+                      `ShellView`'s cleanup kills the pty, so a dock taken out of
+                      the tree takes the shell's running command with it.
+
+                      Collapsed to nothing, as the projects column is: the way
+                      back is the rail's Terminal button and `⌃\``, which are on
+                      screen whatever the dock is doing. It used to collapse to
+                      its tab strip, which kept 36px of the pane's height for a
+                      row that only reopened it. */}
+                  <ResizablePanel
+                    defaultSize={320}
+                    minSize={160}
+                    collapsible
+                    collapsedSize={0}
+                    panelRef={dockPanel}
+                    // `Panel` wraps its children in a scroll container, and
+                    // this panel has nothing to scroll — the dock's own panes
+                    // are `absolute inset-0`. A collapse lands on a fractional
+                    // pixel once the layout has been through the library's
+                    // percentages, which showed up as a scrollbar.
+                    style={{ overflow: "hidden" }}
+                    // Dragging the dock shut past its minimum collapses the
+                    // panel, and without this the store would still say open —
+                    // a chevron pointing down at a dock that is already down,
+                    // and one press of `⌃`` doing nothing.
+                    onResize={(size, _id, previous) => {
+                      if (previous === undefined) return
+
+                      const shown = size.inPixels > 0
+                      if (shown !== useDock.getState().open) {
+                        useDock.getState().toggle()
+                      }
+                    }}
+                  >
+                    {/* Hidden rather than unmounted while shut, for the ptys —
+                        and hidden rather than left to clip, or a fractional
+                        collapse shows a sliver of the strip's edge. */}
+                    <div
+                      className={cn(
+                        CARD,
+                        !dockOpen && "pointer-events-none opacity-0"
+                      )}
+                    >
+                      <Dock />
+                    </div>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
+              </ResizablePanel>
+
+              {/* Hidden with the column, as the projects' is: a shut Explorer
+                  is nothing at all, and its way back is the title bar's
+                  button, which is on screen whatever the column is doing. */}
+              <Gap className={cn(!sidebar && "hidden")} />
+
+              {/* The Explorer: the contents of the checkout being worked in,
+                  and the whole height of the column. */}
+              <ResizablePanel
+                defaultSize={320}
+                minSize={240}
+                maxSize={520}
+                // Dragging the handle past the minimum closes it too, which is
+                // the other half of what `⌘B` does — so the state follows the
+                // panel as well as driving it, or a column dragged shut would
+                // leave `⌘B` needing two presses to bring it back.
+                //
+                // Collapsed to nothing, as the projects column and the dock
+                // are. It used to keep a 36px rail holding the button that
+                // reopened it; that button is in the title bar now
+                // (`ExplorerToggle`), so the rail only cost the pane width.
+                collapsible
+                collapsedSize={0}
+                panelRef={sidebarPanel}
+                // The dock's panel needs this for the same reason.
+                style={{ overflow: "hidden" }}
+                onResize={(size, _id, previous) => {
+                  if (previous === undefined) return
+
+                  const shown = size.inPixels > 0
+                  if (shown !== useStudio.getState().sidebar) {
+                    toggleSidebar()
+                  }
+                }}
+              >
+                <div
+                  className={cn(CARD, "@container relative")}
+                  data-tour="explorer"
+                >
+                  {/*
+                    Hidden rather than unmounted while the column is shut: the
+                    tree is what watches the checkout's changes for the count on
+                    its `Changes` tab, and one taken out of the React tree would
+                    stop watching and come back scrolled to the top. Hidden
+                    rather than left to clip, too, or a collapse landing on a
+                    fractional pixel shows a sliver of the tree's edge.
+
+                    **`opacity-0` and not `invisible`, and that is the
+                    flicker.** The rows here are `Button`s, `Button` carries
+                    `transition-all`, and `visibility` is one of the properties
+                    `all` covers — it transitions discretely, so `visible →
+                    hidden` holds at *visible* for the whole 150ms before
+                    flipping. Opacity does not inherit, so the children's own
+                    transitions never see it, and this box has none.
+
+                    Two sources for the one fact, each covering what the other
+                    cannot: the store is what a *click* changes, and the
+                    container query is what a *drag* crosses, since dragging
+                    only reaches the store afterwards through `onResize`.
+                    `100px` is anywhere between shut and the panel's `minSize`.
+                  */}
+                  <div
+                    className={cn(
+                      "h-full overflow-hidden @max-[100px]:pointer-events-none @max-[100px]:opacity-0",
+                      !sidebar && "pointer-events-none opacity-0"
+                    )}
+                  >
+                    <FileTree onAddFolder={addProject} />
+                  </div>
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+
+      <SystemBar />
+
+      {/* Mounted rather than opened from anywhere: the palette is a shortcut
+          (⌘P) and owns it, so nothing here has to hold a piece of it. */}
+      <CommandPalette />
+      <PluginNotices />
+      <UnsavedDialog />
+
+      {adding && <AddFolderDialog onClose={() => setAdding(false)} />}
+      {/* The project menus' confirmations — asked for from the rail and the
+          column's header both, so drawn here rather than by either. */}
+      <ProjectDialogs />
+
+      {settingsOpen && (
+        <SettingsDialog onClose={() => setSettingsOpen(false)} />
+      )}
+    </div>
+  )
+}
+
+/**
+ * The box each column of the workbench is drawn in.
+ *
+ * The edge is **drawn over the content**, not a border, and the difference is
+ * pixels the panels already count: a border takes 2px out of the box, and the
+ * Explorer collapsed to exactly a 36px rail once, so a bordered card clipped
+ * the last pixel of it.
+ *
+ * Over it by an `::after` on top of the card's own stack (`isolate`), not an
+ * inward `outline`, which it was: Chromium paints a positioned descendant
+ * after its ancestor's outline, so anything filled and positioned inside a
+ * card — the tab strip, a diff's added rows — wiped the edge where it met it.
+ */
+const CARD =
+  "studio-card relative isolate h-full overflow-hidden rounded-xl bg-background after:pointer-events-none after:absolute after:inset-0 after:z-[100] after:rounded-[inherit] after:border after:border-border"
+
+/**
+ * A resize handle drawn as the canvas between two cards rather than as a
+ * line — the gap is the handle. A line is drawn down its middle only while it
+ * is hovered or dragged, the way the chat's `SideColumn` handle shows, so every
+ * edge that moves in this window says so the same way. Double-clicking puts
+ * the panel back to its `defaultSize`, which is the library's own behaviour.
+ */
+function Gap({ className }: { className?: string }) {
+  return (
+    <ResizableHandle
+      title="Drag to resize, double-click to reset"
+      className={cn(
+        "w-1.5 bg-transparent aria-[orientation=horizontal]:h-1.5",
+        "after:w-0.5 after:rounded-full after:transition-colors aria-[orientation=horizontal]:after:top-1/2 aria-[orientation=horizontal]:after:h-0.5",
+        "data-[separator=active]:after:bg-ring/60 data-[separator=hover]:after:bg-ring/60",
+        className
+      )}
+    />
+  )
+}
+
+/**
+ * The title bar, across the whole window: the traffic lights' clearance at the
+ * left, the command field in the middle, and canvas to drag by. It names no
+ * project — the left column lists them and marks the one selected, so a crumb
+ * here said it twice.
+ *
+ * **Three columns, `1fr auto 1fr`**, so the field is centred on the window
+ * rather than on what is left of either side, and so nothing clickable sits
+ * inside a drag region: the regions are the cells between the controls, never a
+ * box with a button punched through it — macOS drops those `no-drag` holes
+ * often enough that the button inside one works every other press.
+ *
+ * The `5.25rem` is what clears the lights at `x: 18`, since macOS insets its own
+ * buttons into whatever the app draws up here (`titleBarStyle` and
+ * `trafficLightPosition` in `main/main.ts`). `h-11` is `TitleBarDragStrip`'s
+ * height, which stands in for this bar while the splash is up.
+ *
+ * The right cell holds the Explorer's toggle, over the column it opens and
+ * shuts — editors put it there, and it is the one place that is on screen
+ * whether the column is or not.
+ */
+function WindowTitleBar() {
+  return (
+    <header className="grid h-11 shrink-0 grid-cols-[1fr_auto_1fr] items-center">
+      <div className="flex h-full min-w-0 items-center">
+        {HAS_TRAFFIC_LIGHTS ? (
+          <div className="drag-region h-full w-[5.25rem] shrink-0" />
+        ) : (
+          <div className="w-2 shrink-0" />
+        )}
+        <div className="drag-region h-full min-w-6 flex-1" />
+      </div>
+
+      {/* The palette's own door: it was a `Search` row at the top of the
+          projects column, which made it look like a search of the projects. */}
+      <button
+        type="button"
+        onClick={() => usePalette.getState().setOpen(true)}
+        data-tour="palette"
+        className="studio-surface no-drag flex h-7 w-[min(28rem,36vw)] items-center gap-2 rounded-md bg-background px-2.5 text-xs text-muted-foreground outline -outline-offset-1 outline-border transition-colors hover:text-foreground"
+      >
+        <Search className="size-3.5 shrink-0" />
+        <span className="flex-1 truncate text-center">Run a command</span>
+        <kbd className="shrink-0 font-sans text-[0.65rem] text-muted-foreground/70">
+          {IS_MAC ? "⌘P" : "Ctrl+P"}
+        </kbd>
+      </button>
+
+      <div className="flex h-full min-w-0 items-center">
+        <div className="drag-region h-full min-w-6 flex-1" />
+        <ExplorerToggle />
+        <div className="w-2.5 shrink-0" />
+      </div>
+    </header>
+  )
+}
+
+/**
+ * Shows and hides the Explorer, the same as `⌘B`. Always on screen, and in one
+ * place, rather than only while the column is shut: a button that moved with
+ * the state it changes would be somewhere different every time it was wanted.
+ */
+function ExplorerToggle() {
+  const sidebar = useStudio((state) => state.sidebar)
+  const toggleSidebar = useStudio((state) => state.toggleSidebar)
+  const t = useT()
+
+  return (
+    <IconButton
+      label={sidebar ? t("files.rail.hide") : t("files.rail.show")}
+      // Into the window rather than above it: this is the window's top-right
+      // corner, and the default puts the tooltip off its edge.
+      side="bottom"
+      onClick={toggleSidebar}
+      className="no-drag size-7"
+    >
+      {sidebar ? (
+        <PanelRightClose className="size-4" />
+      ) : (
+        <PanelRightOpen className="size-4" />
+      )}
+    </IconButton>
+  )
+}
+
+/**
+ * Shown when the workspace could not be read.
+ *
+ * There is deliberately nothing to click: this means `manifest.json` could not
+ * be read, and no button the studio could offer would fix a permissions problem
+ * or a corrupt file — while a "reset" that deleted the manifest would throw away
+ * the workspace, which is the one thing worth keeping. So it says where to look
+ * instead.
+ */
+function StorageError({ message }: { message: string }) {
+  return (
+    <div className="grid h-svh place-items-center p-6">
+      <TitleBarDragStrip />
+      <div className="max-w-md space-y-3 text-center">
+        <h1 className="font-heading font-medium">
+          Could not open your workspace
+        </h1>
+        <p className="font-mono text-xs text-destructive">{message}</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          Your workspace is <code className="font-mono">manifest.json</code>{" "}
+          under <code className="font-mono">~/.veystudio</code>, listing the
+          folders it points at. Those folders are untouched — check that the
+          manifest is readable.
+        </p>
+      </div>
+    </div>
+  )
+}
