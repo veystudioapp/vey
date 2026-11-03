@@ -3,7 +3,12 @@ import { session, webContents, type WebContents } from "electron"
 import type { CookieSite, PickedElement } from "../shared/browser"
 import { schemeOf, type ImportedCookie } from "./browser-cookies"
 import { siteOf } from "./browser-import"
-import type { BrowserPage } from "./browser-hub"
+import {
+  evaluationOf,
+  type BrowserPage,
+  type ConsoleEntry,
+  type Evaluation,
+} from "./browser-hub"
 
 /** Where the chat's browser keeps its cookies and storage: one profile for
  * every chat and every launch, so a site signed into once stays signed in —
@@ -108,9 +113,41 @@ const SETTLE_MS = 10_000
  * a 2560px Retina one, at a quarter of the tokens. */
 const SHOT_WIDTH = 1280
 
+/** How many console lines a page keeps for `console` before the oldest go. */
+const MAX_CONSOLE = 200
+
+const consoles = new WeakMap<WebContents, ConsoleEntry[]>()
+
+/**
+ * A guest's console, listened to from the first attach — the error worth
+ * reading is usually the one logged while the page loaded, before anybody
+ * thought to ask. Kept per contents rather than per page object, because a
+ * tab re-attaching makes a new page over the same contents, and a second
+ * listener would log every line twice.
+ */
+function consoleOf(contents: WebContents): ConsoleEntry[] {
+  const known = consoles.get(contents)
+  if (known) return known
+  const entries: ConsoleEntry[] = []
+  consoles.set(contents, entries)
+  contents.on("console-message", (event) => {
+    const { level, message, lineNumber, sourceId } = event
+    entries.push({
+      level,
+      text: message,
+      ...(sourceId ? { source: `${sourceId}:${lineNumber}` } : {}),
+    })
+    if (entries.length > MAX_CONSOLE) {
+      entries.splice(0, entries.length - MAX_CONSOLE)
+    }
+  })
+  return entries
+}
+
 function pageOf(contents: WebContents): BrowserPage {
   const run = <T>(script: string): Promise<T> =>
     contents.executeJavaScript(script, true) as Promise<T>
+  const logged = consoleOf(contents)
 
   /**
    * Waits for whatever the last action set off: a beat for a click's handler to
@@ -208,6 +245,11 @@ function pageOf(contents: WebContents): BrowserPage {
       return true
     },
 
+    async reload() {
+      contents.reload()
+      await settle()
+    },
+
     async snapshot() {
       const body = await run<string>(SNAPSHOT_SCRIPT)
       return `${contents.getTitle()}\n${contents.getURL()}\n\n${body}`
@@ -216,6 +258,60 @@ function pageOf(contents: WebContents): BrowserPage {
     async click(ref) {
       await click(ref)
       await settle()
+    },
+
+    async hover(ref) {
+      const { x, y } = await pointOf(ref)
+      contents.sendInputEvent({ type: "mouseMove", x, y })
+      await settle()
+    },
+
+    async select(ref, values) {
+      // Set in the page rather than clicked: a `<select>`'s list is a native
+      // popup outside the page, which `sendInputEvent` cannot reach.
+      const result = await run<
+        | { chosen: string[] }
+        | { error: "missing" | "kind" | "none"; options?: string[] }
+      >(`(() => {
+        const el = document.querySelector(${JSON.stringify(selectorOf(ref))})
+        if (!el) return { error: "missing" }
+        if (el.tagName !== "SELECT") return { error: "kind" }
+        const wanted = ${JSON.stringify(values)}
+        const options = [...el.options]
+        let picked = options.filter((option) =>
+          wanted.includes(option.value) || wanted.includes(option.text.trim()))
+        if (!picked.length) {
+          return { error: "none", options: options.slice(0, 50).map((option) => option.text.trim()) }
+        }
+        if (!el.multiple) picked = picked.slice(0, 1)
+        for (const option of options) option.selected = picked.includes(option)
+        el.dispatchEvent(new Event("input", { bubbles: true }))
+        el.dispatchEvent(new Event("change", { bubbles: true }))
+        return { chosen: picked.map((option) => option.text.trim()) }
+      })()`)
+      if ("chosen" in result) {
+        await settle()
+        return result.chosen
+      }
+      if (result.error === "missing") throw new Error(missing(ref))
+      if (result.error === "kind") {
+        throw new Error(
+          `${ref} is not a <select>. Click it open and click the option instead.`
+        )
+      }
+      throw new Error(
+        `No option of ${ref} is ${values.join(" or ")}. Its options: ${(result.options ?? []).join(" | ")}`
+      )
+    },
+
+    hasText(text) {
+      return run<boolean>(
+        `!!document.body && document.body.innerText.includes(${JSON.stringify(text)})`
+      )
+    },
+
+    console() {
+      return logged.splice(0)
     },
 
     async type(ref, text, submit) {
@@ -258,6 +354,13 @@ function pageOf(contents: WebContents): BrowserPage {
         return true
       })()`)
       if (!found && ref) throw new Error(missing(ref))
+    },
+
+    async evaluate(script) {
+      const result = await run<Evaluation>(evaluationOf(script))
+      // A script may click or navigate as well as read.
+      await settle()
+      return result
     },
 
     async capture() {

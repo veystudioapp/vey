@@ -5,7 +5,14 @@
  *
  *   bun test/browser.ts
  */
-import { BrowserHub, type BrowserPage } from "../src/main/browser-hub"
+import {
+  BrowserHub,
+  consoleText,
+  evaluationOf,
+  waitUntil,
+  type BrowserPage,
+  type ConsoleEntry,
+} from "../src/main/browser-hub"
 import {
   BROWSER_READ_ACTIONS,
   browserActionOf,
@@ -23,11 +30,17 @@ function fakePage(id: number, alive = true): BrowserPage {
     where: () => `page ${id}`,
     navigate: async () => {},
     back: async () => false,
+    reload: async () => {},
     snapshot: async () => `snapshot ${id}`,
     click: async () => {},
+    hover: async () => {},
     type: async () => {},
     press: async () => {},
+    select: async (_ref, values) => values,
+    hasText: async () => false,
+    console: () => [],
     scroll: async () => {},
+    evaluate: async () => ({ ok: true, value: "undefined" }),
     screenshot: async () => ({ data: "", mimeType: "image/jpeg" }),
     capture: async () => ({ data: "", width: 0, height: 0 }),
     inspect: async () => null,
@@ -75,14 +88,149 @@ section("wire names")
   )
   check(
     "an unknown action on the browser's server is not one",
-    browserActionOf("mcp__vey_browser__evaluate") === null
+    browserActionOf("mcp__vey_browser__drag") === null
   )
   check(
-    "the read-only modes cannot click or type",
-    !BROWSER_READ_ACTIONS.includes("click") &&
-      !BROWSER_READ_ACTIONS.includes("type") &&
-      !BROWSER_READ_ACTIONS.includes("press_key")
+    "the read-only modes cannot click, type, choose or run a script",
+    (
+      ["click", "type", "press_key", "select_option", "evaluate"] as const
+    ).every((action) => !BROWSER_READ_ACTIONS.includes(action))
   )
+  check(
+    "but can reload, hover, wait and read the console",
+    (["reload", "hover", "wait_for", "console"] as const).every((action) =>
+      BROWSER_READ_ACTIONS.includes(action)
+    )
+  )
+}
+
+section("evaluationOf")
+{
+  // The guest script is run here against a stand-in for the DOM globals the
+  // serialiser names, which is as close to the page as a test without
+  // Electron gets.
+  class Node {
+    nodeType = 1
+    outerHTML = '<img id="logo">'
+    textContent = ""
+  }
+  class NodeList {}
+  class HTMLCollection {}
+  const runIn = (script: string): Promise<{ ok: boolean; value: string }> =>
+    new Function(
+      "Node",
+      "NodeList",
+      "HTMLCollection",
+      "page",
+      `return ${evaluationOf(script)}`
+    )(Node, NodeList, HTMLCollection, { title: "Home", logo: new Node() })
+
+  const cases: [string, string, string][] = [
+    ["an expression", "page.title", '"Home"'],
+    ["with a trailing semicolon", "page.title;", '"Home"'],
+    ["a function, called", "() => page.title.length", "4"],
+    ["an async function", "async () => { return 1 + 1 }", "2"],
+    [
+      "statements with a return",
+      "const t = page.title\nreturn t + '!'",
+      '"Home!"',
+    ],
+    ["await at the top", "await Promise.resolve(3)", "3"],
+    ["nothing returned", "page.title = 'Changed'; page.other = 1", "undefined"],
+    ["an element as its markup", "page.logo", '"<img id=\\"logo\\">"'],
+    ["a comment last", "page.title // the title", '"Home"'],
+  ]
+  for (const [name, script, expected] of cases) {
+    const got = await runIn(script)
+    check(name, got.ok && got.value === expected, got)
+  }
+
+  const cycle = await runIn("(() => { const a = {}; a.self = a; return a })()")
+  check(
+    "a cycle does not throw",
+    cycle.ok && cycle.value.includes("[repeated]")
+  )
+
+  const thrown = await runIn("throw new Error('nope')")
+  check(
+    "what the script threw comes back as text",
+    !thrown.ok && thrown.value.includes("nope"),
+    thrown
+  )
+
+  let refused = ""
+  try {
+    evaluationOf("const = 1")
+  } catch (error) {
+    refused = (error as Error).message
+  }
+  check(
+    "a script that does not parse is refused before the page sees it",
+    refused.startsWith("The script does not parse"),
+    refused
+  )
+}
+
+section("waitUntil")
+{
+  let calls = 0
+  const met = await waitUntil(async () => ++calls === 3, 1000, 5)
+  check("polls until the check holds", met && calls === 3, calls)
+
+  let thrown = 0
+  const through = await waitUntil(
+    async () => {
+      thrown += 1
+      if (thrown === 1) throw new Error("navigating")
+      return true
+    },
+    1000,
+    5
+  )
+  check("a check that throws is a no, not the end", through && thrown === 2)
+
+  const started = Date.now()
+  const never = await waitUntil(async () => false, 40, 5)
+  check(
+    "gives up at its time",
+    !never && Date.now() - started >= 40 && Date.now() - started < 500
+  )
+}
+
+section("consoleText")
+{
+  const entries: ConsoleEntry[] = [
+    { level: "info", text: "ready" },
+    {
+      level: "error",
+      text: "Uncaught TypeError: x is undefined",
+      source: "http://localhost:5173/src/App.tsx:12",
+    },
+  ]
+  const all = consoleText(entries, false)
+  check(
+    "every line, with its level and source",
+    all ===
+      "[info] ready\n[error] Uncaught TypeError: x is undefined (http://localhost:5173/src/App.tsx:12)",
+    all
+  )
+  check(
+    "errors only",
+    consoleText(entries, true).startsWith("[error]") &&
+      !consoleText(entries, true).includes("ready")
+  )
+  check(
+    "nothing said is said so",
+    consoleText([], false).startsWith("Nothing in the console")
+  )
+  const flood = consoleText(
+    Array.from({ length: 2000 }, () => ({
+      level: "info" as const,
+      text: "x".repeat(100),
+    })),
+    false
+  )
+  check("a flood is cut", flood.length < 21_000 && flood.includes("(cut at"))
 }
 
 section("BrowserHub")

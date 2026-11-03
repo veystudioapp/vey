@@ -186,8 +186,11 @@ imports may reach `electron`.
 - **`browser-hub.ts` + `electron-browser.ts`** — **the chat's browser**: a
   `<webview>` beside the conversation (`chat/chat-browser.tsx`,
   `lib/browser/store.ts`), **tabbed per chat**, that the chat's `claude`
-  drives through nine tools, `mcp__vey_browser__*` (`tabs`, `navigate`,
-  `back`, `snapshot`, `screenshot`, `scroll`, `click`, `type`, `press_key`) —
+  drives through fifteen tools, `mcp__vey_browser__*` (`tabs`, `navigate`,
+  `back`, `reload`, `snapshot`, `screenshot`, `scroll`, `hover`, `wait_for`,
+  `console`, `click`, `type`, `press_key`, `select_option`, `evaluate` —
+  JavaScript in the page, its shape decided by parsing in main,
+  `evaluationOf`) —
   always on **the shown tab**. The tools are an SDK in-process
   server (`createSdkMcpServer`), **one instance per session** with the chat as
   its closure, handed over as `mcpServers` through `ChatSource.mcpServers` —
@@ -200,8 +203,10 @@ imports may reach `electron`.
   half that imports `electron` — reading through `executeJavaScript` (refs
   written onto elements as `data-vey-ref`), acting through `sendInputEvent`.
   `guardWebviews` in `main.ts` locks every guest down (no preload, sandboxed,
-  `persist:vey-browser`, `http(s)` only). `Plan`/`Read only` get the five that
-  look (`BROWSER_READ_ACTIONS` in `shared/browser.ts`); `Edits` all nine.
+  `persist:vey-browser`, `http(s)` only). `Plan`/`Read only` get the ten that
+  look (`BROWSER_READ_ACTIONS` in `shared/browser.ts`) — never `evaluate` or
+  `select_option`; `Edits` all fifteen. A guest's console is buffered from
+  its first attach (`consoleOf`, per `webContents`, 200 lines).
   **`Import cookies…`** is a dialog (`chat/cookie-import-dialog.tsx`): a
   browser profile on this machine — **`browser-import.ts`**, Chromium's family
   and Firefox through `node:sqlite` on a copy of the database, sites listed

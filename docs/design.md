@@ -602,19 +602,43 @@ sight of the chat that is driving it.
 
 - **The tools are an in-process MCP server** (`main/browser-hub.ts`,
   `createSdkMcpServer`): `tabs`, `navigate`, `back`, `snapshot`, `screenshot`,
-  `scroll`, `click`, `type`, `press_key`, wire names `mcp__vey_browser__*`. It
+  `scroll`, `click`, `type`, `press_key`, then `reload`, `hover`,
+  `wait_for`, `console`, `select_option` and `evaluate`, wire names
+  `mcp__vey_browser__*`. It
   is the first server this app serves since the three that went with the
   Database, API and Notes panels, and it is unlike them in the way that
   mattered: an SDK server's config on the CLI's command line is a name and a
   type, the calls come back over the control channel, and there is no port and
   no secret for another process to find. One instance per session, with the
   chat as its closure — a call can only reach that chat's page.
-- **What the CLI is handed stays identical**: the nine definitions are the
+- **What the CLI is handed stays identical**: the fifteen definitions are the
   same on every turn of every chat, so they sit in the cached prefix like the
   CLI's own tools. Which mode may call which is `permits`: `Plan` and
-  `Read only` get the six that look (`BROWSER_READ_ACTIONS` — `navigate` is a
-  `WebFetch` somebody can watch), `Edits` gets all nine without asking, `Ask`
-  asks about each like the plain CLI.
+  `Read only` get the ten that look (`BROWSER_READ_ACTIONS` — `navigate` is a
+  `WebFetch` somebody can watch, `reload` the same fetch again, a hover what a
+  passing pointer opens), `Edits` gets all fifteen without asking, `Ask` asks
+  about each like the plain CLI.
+- **The last six came after the first nine**, for one reason: each was a
+  point where a turn left the chat's browser for a Playwright MCP — the window
+  out of sight this browser exists to replace. Trying a colour on the live
+  page (`evaluate`), reloading after an edit the dev server did not push
+  (`reload`), a menu that opens on hover (`hover`), a `<select>`, whose list
+  is a native popup `sendInputEvent` cannot reach and so is set in the page
+  with `input`/`change` dispatched (`select_option`), a single-page app still
+  rendering (`wait_for`, polled from main so a navigation mid-wait is a no
+  rather than a failure), and the error the page threw (`console` — buffered
+  per guest from its first attach, since the error worth reading is the one
+  logged while the page loaded; 200 lines, forgotten once read). Network
+  requests, file uploads and dialogs are still not here: each needs a CDP
+  session kept attached, which the first nine were built to do without.
+- **`evaluate`** runs in the page's
+  main world like the snapshot does, and is kept off the read-only list: a
+  script can do anything the page's own can. Whether the text is an
+  expression, a function or statements with a `return` is decided by parsing
+  it in main (`evaluationOf`), never by trying it twice in the page, where a
+  first attempt that failed half-way would already have changed it. The
+  script is pasted into the source rather than `eval`ed, so a CSP without
+  `unsafe-eval` does not stop it.
 - **The tools act on the shown tab**, and only that one: what `claude` drives
   and what the user is looking at are never two different pages. `tabs`
   lists, opens, shows and closes them by their number in the list. The tabs

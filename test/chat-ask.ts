@@ -7,6 +7,8 @@ import {
   said,
   titleFor,
 } from "../src/main/chat"
+import { rememberedWhere } from "../src/main/claude-agent"
+import type { PermissionUpdate } from "@anthropic-ai/claude-agent-sdk"
 import { check, finish, section } from "./harness"
 
 /**
@@ -264,6 +266,46 @@ check(
   titleFor("SandboxNetworkAccess", { host: "api.anthropic.com" }).includes(
     "api.anthropic.com"
   )
+)
+
+section("where an always-allow is written down")
+
+const clickup = "mcp__claude_ai_ClickUp__clickup_get_user"
+const local = (
+  toolName: string
+): Extract<PermissionUpdate, { type: "addRules" }> => ({
+  type: "addRules",
+  rules: [{ toolName }],
+  behavior: "allow",
+  destination: "localSettings",
+})
+
+check(
+  "an MCP tool's rule is the user's, not the project's",
+  rememberedWhere(clickup, [local(clickup)])[0]?.destination === "userSettings"
+)
+
+check(
+  "a built-in's rule stays in the project",
+  rememberedWhere("Bash", [local("Bash")])[0]?.destination === "localSettings"
+)
+
+check(
+  "a mixed rule set is left where the CLI put it",
+  rememberedWhere(clickup, [
+    { ...local(clickup), rules: [{ toolName: clickup }, { toolName: "Bash" }] },
+  ])[0]?.destination === "localSettings"
+)
+
+check(
+  "a suggestion that is not about rules passes through",
+  rememberedWhere(clickup, [
+    {
+      type: "addDirectories",
+      directories: ["/tmp"],
+      destination: "localSettings",
+    },
+  ])[0]?.destination === "localSettings"
 )
 
 finish()

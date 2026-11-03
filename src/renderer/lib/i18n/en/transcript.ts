@@ -110,6 +110,12 @@ export const transcript = {
       click: "Claude is clicking…",
       type: "Claude is typing…",
       press_key: "Claude is pressing a key…",
+      evaluate: "Claude is running a script on the page…",
+      reload: "Claude is reloading the page…",
+      hover: "Claude is hovering…",
+      wait_for: "Claude is waiting for the page…",
+      console: "Claude is reading the console…",
+      select_option: "Claude is choosing an option…",
     },
   },
   cookies: {

@@ -111,6 +111,12 @@ export const transcript: Messages["transcript"] = {
       click: "Claude đang bấm…",
       type: "Claude đang gõ…",
       press_key: "Claude đang nhấn phím…",
+      evaluate: "Claude đang chạy script trên trang…",
+      reload: "Claude đang tải lại trang…",
+      hover: "Claude đang rê chuột…",
+      wait_for: "Claude đang chờ trang…",
+      console: "Claude đang đọc console…",
+      select_option: "Claude đang chọn một mục…",
     },
   },
   cookies: {

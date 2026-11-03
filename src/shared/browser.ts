@@ -14,12 +14,18 @@ export const BROWSER_ACTIONS = [
   "tabs",
   "navigate",
   "back",
+  "reload",
   "snapshot",
   "screenshot",
   "scroll",
+  "hover",
+  "wait_for",
+  "console",
   "click",
   "type",
   "press_key",
+  "select_option",
+  "evaluate",
 ] as const
 
 export type BrowserAction = (typeof BROWSER_ACTIONS)[number]
@@ -27,16 +33,22 @@ export type BrowserAction = (typeof BROWSER_ACTIONS)[number]
 /**
  * The ones that only look: open a page, read it, move around it. What `Plan`
  * and `Read only` may call — `navigate` is a `WebFetch` that somebody can
- * watch, and `WebFetch` is on their list. A click or a keystroke can submit a
- * form, so those are not.
+ * watch, and `WebFetch` is on their list; `reload` is the same fetch again,
+ * and a hover only opens what a pointer passing over would. A click, a
+ * keystroke or a choice in a `<select>` can submit a form, so those are not,
+ * and neither is `evaluate`, which can do anything the page's own scripts can.
  */
 export const BROWSER_READ_ACTIONS: readonly BrowserAction[] = [
   "tabs",
   "navigate",
   "back",
+  "reload",
   "snapshot",
   "screenshot",
   "scroll",
+  "hover",
+  "wait_for",
+  "console",
 ]
 
 /** A tool's name as the CLI calls it — `mcp__vey_browser__click`. */

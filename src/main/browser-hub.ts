@@ -37,19 +37,178 @@ export type BrowserPage = {
   navigate: (url: string) => Promise<void>
   /** False when there was nothing to go back to. */
   back: () => Promise<boolean>
+  reload: () => Promise<void>
   /** The page as text, its interactive elements numbered `[e1]`, `[e2]`… for
    * `click` and `type` to name. */
   snapshot: () => Promise<string>
   click: (ref: string) => Promise<void>
+  hover: (ref: string) => Promise<void>
   type: (ref: string, text: string, submit: boolean) => Promise<void>
   press: (key: string) => Promise<void>
+  /** Chooses a `<select>`'s options by value or text; answers what was
+   * chosen, by text. */
+  select: (ref: string, values: string[]) => Promise<string[]>
+  /** Whether the page's visible text has this in it, for `wait_for`. */
+  hasText: (text: string) => Promise<boolean>
+  /** What the page logged since the last call, which forgets it. */
+  console: () => ConsoleEntry[]
   scroll: (direction: "up" | "down", ref?: string) => Promise<void>
+  /** `evaluationOf(script)` run in the page: its result as text, or what it
+   * threw. */
+  evaluate: (script: string) => Promise<Evaluation>
   screenshot: () => Promise<{ data: string; mimeType: string }>
   /** What it shows at full resolution, for the annotation toolbar. */
   capture: () => Promise<BrowserCapture>
   /** The element at a point of the viewport, for `Select element`. */
   inspect: (x: number, y: number) => Promise<PickedElement | null>
 }
+
+/** What `evaluate` answers: the value as JSON when `ok`, the error otherwise. */
+export type Evaluation = { ok: boolean; value: string }
+
+/** One line of a page's console, as `console-message` reports it. An uncaught
+ * exception arrives here too, as an error. */
+export type ConsoleEntry = {
+  level: "debug" | "info" | "warning" | "error"
+  text: string
+  /** `file:line`, where Chromium said. */
+  source?: string
+}
+
+/** The longest text `evaluate` or `console` hands back — `document.body
+ * .outerHTML` on a real app is megabytes, and a page logging in a loop is
+ * the same, and the turn pays for every one of them. */
+const MAX_RESULT = 20_000
+
+function cut(value: string): string {
+  return value.length > MAX_RESULT
+    ? `${value.slice(0, MAX_RESULT)}\n… (cut at ${MAX_RESULT} of ${value.length} characters)`
+    : value
+}
+
+/** The longest `wait_for` may hold a turn. A page that never shows the text
+ * should come back as an answer, and thirty seconds is longer than any build
+ * a dev server runs before it serves. */
+const MAX_WAIT_S = 30
+
+/** Polls `check` until it is true or `ms` have passed. A check that throws —
+ * the page navigating under it — is a no rather than the end of the wait. */
+export async function waitUntil(
+  check: () => Promise<boolean>,
+  ms: number,
+  step = 250
+): Promise<boolean> {
+  const end = Date.now() + ms
+  for (;;) {
+    try {
+      if (await check()) return true
+    } catch {
+      // Between pages.
+    }
+    if (Date.now() >= end) return false
+    await new Promise((resolve) => setTimeout(resolve, step))
+  }
+}
+
+/** The console as `console` answers it. */
+export function consoleText(
+  entries: ConsoleEntry[],
+  errorsOnly: boolean
+): string {
+  const shown = errorsOnly
+    ? entries.filter((entry) => entry.level === "error")
+    : entries
+  if (shown.length === 0) {
+    return errorsOnly
+      ? "No errors in the console since the last look."
+      : "Nothing in the console since the last look."
+  }
+  return cut(
+    shown
+      .map(
+        (entry) =>
+          `[${entry.level}] ${entry.text}${entry.source ? ` (${entry.source})` : ""}`
+      )
+      .join("\n")
+  )
+}
+
+const AsyncFunction = Object.getPrototypeOf(async () => {}).constructor as new (
+  body: string
+) => unknown
+
+/**
+ * What `evaluate` runs in the guest for a model's script.
+ *
+ * Three shapes are accepted, because a model writes all three: an expression
+ * (`document.title`), a function (`() => { … }`, Playwright's shape, called),
+ * and statements with a `return`. Which one it is, is decided by parsing here
+ * in main — never by running it twice in the page, where a first attempt that
+ * failed half-way would already have changed it. A script that parses as
+ * neither is refused with the parser's message before the page sees it.
+ *
+ * The script is pasted into the source rather than handed to `eval` in the
+ * page, so a page whose CSP forbids `unsafe-eval` still runs it. What it
+ * threw comes back as text rather than as `executeJavaScript`'s rejection,
+ * which says only that the script failed.
+ */
+export function evaluationOf(script: string): string {
+  const source = script.trim()
+  if (!source) throw new Error("There is no script to run.")
+  const expression = `return (\n${source.replace(/;+\s*$/, "")}\n)`
+  let body: string
+  try {
+    new AsyncFunction(expression)
+    body = expression
+  } catch {
+    try {
+      new AsyncFunction(source)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      throw new Error(`The script does not parse: ${reason}`)
+    }
+    body = source
+  }
+  return `(async () => {
+  const run = async () => {
+${body}
+  }
+  try {
+    let value = await run()
+    if (typeof value === "function") value = await value()
+    return { ok: true, value: (${SERIALISE_SCRIPT})(value) }
+  } catch (error) {
+    return { ok: false, value: String((error && error.stack) || error) }
+  }
+})()`
+}
+
+/**
+ * A page value as JSON the model can read. Elements are their markup, cut —
+ * `querySelector` is the commonest thing to return and `JSON.stringify` makes
+ * it `{}` — node lists are arrays, and an object met twice is named rather
+ * than walked again, which is also what keeps a cycle from throwing.
+ */
+const SERIALISE_SCRIPT = `(value) => {
+  if (value === undefined) return "undefined"
+  const seen = new WeakSet()
+  const json = JSON.stringify(value, (key, item) => {
+    if (typeof item === "bigint") return item.toString() + "n"
+    if (typeof item === "function") return "[function]"
+    if (item instanceof NodeList || item instanceof HTMLCollection) return [...item]
+    if (item instanceof Node) {
+      if (item.nodeType !== 1) return item.textContent
+      const html = item.outerHTML
+      return html.length > 500 ? html.slice(0, 499) + "…" : html
+    }
+    if (item && typeof item === "object") {
+      if (seen.has(item)) return "[repeated]"
+      seen.add(item)
+    }
+    return item
+  }, 2)
+  return json === undefined ? String(value) : json
+}`
 
 /** A tab as `tabs` lists it. */
 export type BrowserTab = { tabId: string; where: string; active: boolean }
@@ -356,6 +515,16 @@ export function browserServer(
         )
       ),
       tool(
+        "reload",
+        "Reload the shown tab — after changing the source, when the dev server does not update the page by itself.",
+        {},
+        () =>
+          call("reload", async (page) => {
+            await page.reload()
+            return after(page, "Reloaded.")
+          })
+      ),
+      tool(
         "snapshot",
         "Read the page in the browser panel: its title, address, the interactive elements numbered as refs ([e1], [e2]…) for click and type, and its visible text. Refs are renumbered by every snapshot, so take a new one after the page changes.",
         {},
@@ -392,6 +561,71 @@ export function browserServer(
           })
       ),
       tool(
+        "hover",
+        "Move the pointer over an element by its ref from the last snapshot, to open a menu or a tooltip that shows on hover.",
+        { ref: REF },
+        ({ ref }) =>
+          call("hover", async (page) => {
+            await page.hover(ref)
+            return after(page, `Hovering over ${ref}.`)
+          })
+      ),
+      tool(
+        "wait_for",
+        `Wait until a text appears on the page, or is gone from it — for a page still loading or a change still arriving — or, with neither, simply wait some seconds. At most ${MAX_WAIT_S} seconds.`,
+        {
+          text: z.string().optional().describe("Wait until this is shown."),
+          textGone: z
+            .string()
+            .optional()
+            .describe("Wait until this is no longer shown."),
+          seconds: z
+            .number()
+            .min(0)
+            .max(MAX_WAIT_S)
+            .optional()
+            .describe(
+              "How long to wait for the text before giving up (default 10), or how long to wait when no text is given (default 1)."
+            ),
+        },
+        ({ text: shown, textGone, seconds }) =>
+          call("wait_for", async (page) => {
+            if (shown === undefined && textGone === undefined) {
+              const ms = (seconds ?? 1) * 1000
+              await new Promise((resolve) => setTimeout(resolve, ms))
+              return after(page, `Waited ${seconds ?? 1}s.`)
+            }
+            const met = await waitUntil(
+              async () =>
+                (shown === undefined || (await page.hasText(shown))) &&
+                (textGone === undefined || !(await page.hasText(textGone))),
+              (seconds ?? 10) * 1000
+            )
+            const what = [
+              shown !== undefined ? `"${shown}" shown` : "",
+              textGone !== undefined ? `"${textGone}" gone` : "",
+            ]
+              .filter(Boolean)
+              .join(" and ")
+            return met
+              ? after(page, `Done waiting: ${what}.`)
+              : failed(
+                  `Gave up after ${seconds ?? 10}s waiting for ${what}.\nNow at: ${page.where()}`
+                )
+          })
+      ),
+      tool(
+        "console",
+        "What the page has written to its console since the last call — its logs, warnings and errors, uncaught exceptions included; the last 200 lines at most.",
+        {
+          errorsOnly: z.boolean().optional().describe("Only the errors."),
+        },
+        ({ errorsOnly }) =>
+          call("console", async (page) =>
+            text(consoleText(page.console(), errorsOnly === true))
+          )
+      ),
+      tool(
         "click",
         "Click an element of the page by its ref from the last snapshot, the way the user's mouse would.",
         { ref: REF },
@@ -426,6 +660,33 @@ export function browserServer(
           call("press_key", async (page) => {
             await page.press(key)
             return after(page, `Pressed ${key}.`)
+          })
+      ),
+      tool(
+        "evaluate",
+        "Run JavaScript in the shown tab's page, as its own scripts would, and get the result back as JSON. Pass an expression (document.title), a function (() => { … }) or statements with a return; await works. Use it for what snapshot cannot say — computed styles, a value in the app's state — or to try a change on the live page, like a colour. A change made this way lasts until the page reloads: the project's source still has to be edited for it to stay.",
+        {
+          script: z.string().describe("The JavaScript to run in the page."),
+        },
+        ({ script }) =>
+          call("evaluate", async (page) => {
+            const { ok, value } = await page.evaluate(script)
+            return ok
+              ? text(cut(value))
+              : failed(`The script threw:\n${cut(value)}`)
+          })
+      ),
+      tool(
+        "select_option",
+        "Choose options in a <select> by its ref from the last snapshot — by their value or their visible text, more than one for a multiple select. A custom dropdown that is not a <select> is clicked open instead.",
+        {
+          ref: REF,
+          values: z.array(z.string()).min(1),
+        },
+        ({ ref, values }) =>
+          call("select_option", async (page) => {
+            const chosen = await page.select(ref, values)
+            return after(page, `Chose ${chosen.join(", ")} in ${ref}.`)
           })
       ),
     ],

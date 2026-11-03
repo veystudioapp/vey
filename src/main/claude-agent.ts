@@ -2,6 +2,7 @@ import {
   query,
   type McpServerConfig,
   type Options,
+  type PermissionUpdate,
   type SDKMessage,
   type SDKRateLimitInfo,
   type SDKUserMessage,
@@ -1405,10 +1406,35 @@ function deciding(
       // Merged over the call rather than replacing it — see `AskDecision.input`.
       updatedInput: decision.input ? { ...input, ...decision.input } : input,
       ...(decision.remember && suggestions.length > 0
-        ? { updatedPermissions: suggestions }
+        ? { updatedPermissions: rememberedWhere(toolName, suggestions) }
         : {}),
     }
   }
+}
+
+/**
+ * Where an "Always allow" is written down.
+ *
+ * The CLI suggests `localSettings` for everything — the project's own
+ * `.claude/settings.local.json` — which for an MCP tool meant allowing a
+ * claude.ai ClickUp once per project, every project, though the connector is
+ * the account's and the same in all of them. So a rule naming only MCP tools
+ * goes to `userSettings` (the profile's `CLAUDE_CONFIG_DIR`) instead; a rule
+ * about a file or a command stays where the CLI put it, since that one really
+ * is about this repository.
+ */
+export function rememberedWhere(
+  toolName: string,
+  suggestions: PermissionUpdate[]
+): PermissionUpdate[] {
+  if (!toolName.startsWith("mcp__")) return suggestions
+  return suggestions.map((update) =>
+    (update.type === "addRules" || update.type === "replaceRules") &&
+    update.destination === "localSettings" &&
+    update.rules.every((rule) => rule.toolName.startsWith("mcp__"))
+      ? { ...update, destination: "userSettings" }
+      : update
+  )
 }
 
 /**
