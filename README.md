@@ -16,7 +16,7 @@
 
 Give every task its own Claude Code agent. They work side by side — in your files, a terminal and a real browser — and every change waits in one diff for you to review, commit and push. All in one window, over the folders you already work in.
 
-https://github.com/user-attachments/assets/88739502-55f2-4c27-ad84-6b630d66d701
+https://github.com/user-attachments/assets/34a94b9d-2904-40d9-9f88-208bb9b1022d
 
 ## How it works
 
