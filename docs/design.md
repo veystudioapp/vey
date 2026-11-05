@@ -221,6 +221,20 @@ anybody has looked since — and a popped-out chat's window does not, since it
 keeps a store of its own. No switch: the dock is the app's own icon, not a strip
 shared with every other app.
 
+### Staying awake while a chat works
+
+Walking away from a running chat used to end it: the Mac idled into sleep, the
+`claude` processes were suspended and the turn died with its connection. While
+any chat is busy, main now holds a `powerSaveBlocker` of
+**`prevent-app-suspension`** (`host.keepAwake`, recomputed off
+`Chats.busy()` on every chat event and after a delete or edit, since a session
+that leaves the map mid-turn never says `busy: false`). **Not**
+`prevent-display-sleep`: the screen going dark costs the turn nothing, and a
+display lit all afternoon is a cost nobody asked for. Only _idle_ sleep is
+held off — closing the lid or choosing Sleep still sleeps. No switch, for the
+notification's reason: whoever walked away from a running chat is who it is
+for, and it lets go the moment the last chat goes quiet.
+
 ### The menu bar, removed
 
 There was a tray icon with the working/waiting count beside it and a menu
@@ -1971,6 +1985,15 @@ asking it, for an answer `/status` and `/config` already give.
 The same renderer served over HTTP on `127.0.0.1` by `src/server/`. A second
 host with its own security surface, for a tab that did less than the window.
 `main/host.ts` stays, so `createIpc` remains free of `electron` for the tests.
+
+### Community, removed
+
+A `Community` menu in the system bar and a `Join the community on` line in the
+feedback dialog, both listing `COMMUNITIES` — one entry, a Facebook group — each
+under a mark drawn in `community-icon.tsx`. A second way out of the app for a
+place to talk, beside the issues the Feedback button already opens, with nobody
+tending it from this side. Deleted with the list, the icons, the type and the
+README's line; the Feedback button and its GitHub issues stay.
 
 ## Development
 

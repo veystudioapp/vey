@@ -107,6 +107,12 @@ export type Host = {
    * launcher's count on Linux. Zero clears it. */
   setBadgeCount: (count: number) => void
 
+  /** Holds the machine off idle sleep while `on` — a chat is working — and
+   * lets it go again. The display may still dim and sleep; a lid closed or
+   * a Sleep chosen from the menu is the user's and is not refused.
+   * Idempotent: called on every chat event with the same answer mostly. */
+  keepAwake: (on: boolean) => void
+
   /** Quits the app the ordinary way, `before-quit` and all, and calls `task`
    * once that cleanup is done — the Windows update's installer. */
   quitAndRun: (task: () => void) => void

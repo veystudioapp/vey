@@ -349,10 +349,21 @@ export function createIpc(host: Host): {
       send(IPC.chatEvent, event)
       const notice = notices.read(event)
       void announce(notice)
+      holdAwake()
     }
   )
 
   const notices = new ChatNotices()
+
+  /*
+   * The machine stays up while any chat is working. Asked of the live sessions
+   * on every event rather than tracked off `busy` events alone: a session that
+   * dies, or a chat deleted or edited mid-turn, leaves the map without ever
+   * saying `busy: false`, and a missed `false` here is a Mac that never sleeps.
+   */
+  const holdAwake = (): void => {
+    host.keepAwake(allChats.busy().length > 0)
+  }
 
   /**
    * Rings the OS notification a chat's event turned out to deserve.
@@ -943,7 +954,10 @@ export function createIpc(host: Host): {
     // `busy: false`, so the watcher would keep it as working for the rest of
     // the run and swallow the first quiet of whatever reused the id.
     notices.forget(id)
-    return allChats.delete(id)
+    const deleted = allChats.delete(id)
+    // `delete` takes the session out of the map before its first await.
+    holdAwake()
+    return deleted
   })
 
   handle(IPC.clearChat, (_event, id: string) => allChats.clear(id))
@@ -968,8 +982,19 @@ export function createIpc(host: Host): {
 
   handle(
     IPC.editChat,
-    (_event, id: string, at: number, prompt: string, restore: boolean) =>
-      allChats.edit(id, at, prompt, restore === true)
+    async (
+      _event,
+      id: string,
+      at: number,
+      prompt: string,
+      restore: boolean
+    ) => {
+      try {
+        return await allChats.edit(id, at, prompt, restore === true)
+      } finally {
+        holdAwake()
+      }
+    }
   )
 
   handle(IPC.stopChat, (_event, id: string) => {

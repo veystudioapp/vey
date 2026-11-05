@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dialog"
 import {
   buildLabel,
-  COMMUNITIES,
   ISSUES_URL,
   issueUrl,
   useFeedbackDialog,
@@ -25,7 +24,6 @@ import {
 } from "@/lib/feedback"
 import { useUpdates } from "@/lib/updates"
 import { cn } from "@/lib/utils"
-import { CommunityIcon } from "./community-icon"
 
 /**
  * One row per kind. The colours are whole class names rather than built from a
@@ -139,23 +137,6 @@ export function FeedbackDialog() {
                 </span>
               </span>
               <ArrowUpRight className="size-4 shrink-0 text-muted-foreground/60 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-foreground" />
-            </a>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 text-xs text-muted-foreground">
-          <span>Join the community on</span>
-          {COMMUNITIES.map((community) => (
-            <a
-              key={community.kind}
-              href={community.url}
-              target="_blank"
-              rel="noreferrer"
-              onClick={close}
-              className="flex items-center gap-1 underline-offset-2 hover:text-foreground hover:underline"
-            >
-              <CommunityIcon kind={community.kind} className="size-3" />
-              {community.name}
             </a>
           ))}
         </div>

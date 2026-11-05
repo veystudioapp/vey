@@ -11,8 +11,6 @@ export const nav: Messages["nav"] = {
   systemBar: {
     feedback: "Góp ý",
     feedbackTitle: "Báo lỗi, đề xuất tính năng hoặc góp ý cải thiện",
-    community: "Cộng đồng",
-    communityTitle: "Tham gia cộng đồng Vey",
     ports: "Ports",
     portsTitle: "Xem các port đang được dùng và dừng process đang giữ nó",
     memoryFree: "Trống {size}",

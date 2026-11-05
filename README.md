@@ -130,10 +130,6 @@ make app       # an unpacked .app
 
 Bugs and requests go to [Issues](https://github.com/veystudioapp/vey/issues). Security reports should not: see [`SECURITY.md`](SECURITY.md). Everyone taking part is held to the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-To talk with other users, join the community:
-
-- [Facebook](https://www.facebook.com/groups/2095997741054237)
-
 ## License
 
 [MIT](LICENSE).

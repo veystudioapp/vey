@@ -7,21 +7,14 @@ import {
   MemoryStick,
   MessageSquareHeart,
   ShieldQuestion,
-  Users,
 } from "lucide-react"
 
 import type { GitUpstream, SystemUsage } from "@shared/api"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Spinner } from "@/components/ui/spinner"
 import { activityOf } from "@/lib/chat/running"
 import { useChats } from "@/lib/chat/store"
 import { unreadIn } from "@/lib/chat/unread"
-import { COMMUNITIES, useFeedbackDialog } from "@/lib/feedback"
+import { useFeedbackDialog } from "@/lib/feedback"
 import { changeCount, useChanges } from "@/lib/files/changes"
 import { useGitStatus } from "@/lib/files/git-status"
 import { shownRootOf } from "@/lib/files/roots"
@@ -31,7 +24,6 @@ import { useSystemUsage } from "@/lib/system/usage"
 import { cn } from "@/lib/utils"
 import { useUpdateWatch } from "@/lib/updates"
 import { useT, type Translate } from "@/lib/i18n"
-import { CommunityIcon } from "./community-icon"
 import { Mark } from "./mark"
 import { UpdatePill } from "./update-pill"
 import { PortsDialog } from "./ports-dialog"
@@ -90,7 +82,6 @@ export function SystemBar() {
           <MessageSquareHeart className="size-3 shrink-0 text-violet-500 transition-transform group-hover:scale-110" />
           {t("nav.systemBar.feedback")}
         </button>
-        <CommunityLink />
         {/* A tool rather than a way out, but wanted as rarely and at the
             same moment — when something says a port is already in use. */}
         <button
@@ -126,38 +117,6 @@ const ACTION = cn(
   ITEM,
   "transition-colors outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
 )
-
-/**
- * The way out to where the users talk: a menu of the communities, each under
- * its own mark. A menu even while there is only one, so the word in the bar
- * names no platform and stays put as the others arrive.
- */
-function CommunityLink() {
-  const t = useT()
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className={cn(ACTION, "group font-medium text-foreground/80")}
-        title={t("nav.systemBar.communityTitle")}
-      >
-        <Users className="size-3 shrink-0 text-emerald-500 transition-transform group-hover:scale-110" />
-        {t("nav.systemBar.community")}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="top" className="w-44">
-        {COMMUNITIES.map((community) => (
-          <DropdownMenuItem
-            key={community.kind}
-            // Out to the browser — `setWindowOpenHandler` in `main.ts`.
-            render={<a href={community.url} target="_blank" rel="noreferrer" />}
-          >
-            <CommunityIcon kind={community.kind} className="size-3.5" />
-            {community.name}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 
 function Divider() {
   return <span aria-hidden className="mx-1 my-1.5 w-px shrink-0 bg-border" />

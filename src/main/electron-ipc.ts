@@ -10,6 +10,7 @@ import {
   net,
   Notification,
   powerMonitor,
+  powerSaveBlocker,
   safeStorage,
   shell,
   type IpcMainInvokeEvent,
@@ -158,6 +159,23 @@ export function registerIpc(
     }
   })
 
+  /*
+   * `prevent-app-suspension` rather than `prevent-display-sleep`: what ended a
+   * turn somebody walked away from was the *system* sleeping, which suspends
+   * the `claude` processes and drops their connection. The screen going dark
+   * costs nothing, and keeping it lit all afternoon is a power bill nobody
+   * asked for.
+   */
+  let awake: number | null = null
+  const keepAwake = (on: boolean): void => {
+    if (on && awake === null) {
+      awake = powerSaveBlocker.start("prevent-app-suspension")
+    } else if (!on && awake !== null) {
+      powerSaveBlocker.stop(awake)
+      awake = null
+    }
+  }
+
   const host: Host = {
     send(channel, payload) {
       for (const window of BrowserWindow.getAllWindows()) {
@@ -258,6 +276,7 @@ export function registerIpc(
     setBadgeCount(count) {
       app.setBadgeCount(Math.max(0, Math.floor(count)))
     },
+    keepAwake,
     browserPage(caller, webContentsId) {
       const sender = (caller as IpcMainInvokeEvent | undefined)?.sender
       return sender ? guestPage(sender, webContentsId) : null
