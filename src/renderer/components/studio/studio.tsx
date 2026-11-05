@@ -46,6 +46,7 @@ import { ChatPane } from "./chat/chat-pane"
 import { FileTree } from "./files/file-tree"
 import { IconButton } from "./icon-button"
 import { ChangesPane } from "./files/changes-pane"
+import { GitGraphPane } from "./files/git-graph-pane"
 import { FileWorkspace } from "./files/file-workspace"
 import { AddFolderDialog } from "./add-folder-dialog"
 import { UnsavedDialog } from "./files/unsaved-dialog"
@@ -75,6 +76,8 @@ function paneView(pane: Pane) {
       return <FileWorkspace />
     case "changes":
       return <ChangesPane />
+    case "graph":
+      return <GitGraphPane />
     case "chat":
       return <ChatPane />
   }

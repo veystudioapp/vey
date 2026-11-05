@@ -50,6 +50,8 @@ export const nav: Messages["nav"] = {
     deleted: "đã xóa",
     changes: "Thay đổi",
     changesIn: "Thay đổi · {folder}",
+    graph: "Git Graph",
+    graphIn: "Git Graph · {folder}",
     chatWaiting: "{title} — đang chờ bạn trả lời",
     chatUnread: "{title} — đã trả lời từ lần bạn xem trước",
   },

@@ -1,15 +1,22 @@
 import { useEffect, useState } from "react"
 import {
   ArrowUp,
-  ChevronRight,
   Copy,
   ExternalLink,
+  GitBranch,
+  GitGraph,
   MessageSquarePlus,
   Search,
   X,
 } from "lucide-react"
+import { create } from "zustand"
 
-import type { GitCommit, GitCommitFile, GitUpstream } from "@shared/api"
+import type {
+  GitCommit,
+  GitCommitFile,
+  GitLogScope,
+  GitUpstream,
+} from "@shared/api"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -19,6 +26,7 @@ import {
 } from "@/components/ui/context-menu"
 import { useChanges } from "@/lib/files/changes"
 import { askAboutLoggedCommit, commitUrl } from "@/lib/files/git-blame"
+import { useGitGraph } from "@/lib/files/git-graph"
 import { GIT_LETTERS, GIT_TONES, useGitStatus } from "@/lib/files/git-status"
 import type { FileRoot } from "@/lib/files/roots"
 import { useT } from "@/lib/i18n"
@@ -27,6 +35,7 @@ import { useComposerBus } from "@/lib/chat/composer-bus"
 import { useShells } from "@/lib/shell/store"
 import { since } from "@/lib/chat/since"
 import { FileIcon } from "../file-icon"
+import { RefChips } from "./ref-chip"
 import { SideRow } from "../side-row"
 
 /** How many commits the list starts with, and how many each `Show more` adds. */
@@ -38,6 +47,15 @@ const MAX_CALL = 1000
  * in main, and one per keystroke is a walk per letter of a word. */
 const FILTER_DELAY_MS = 250
 
+/** Whether the list is every branch or the checked-out one — for the session
+ * and for every project, so switching project does not switch it back. */
+const useBranchScope = create<{ all: boolean; toggle: () => void }>()(
+  (set) => ({
+    all: false,
+    toggle: () => set((state) => ({ all: !state.all })),
+  })
+)
+
 /**
  * The first `count` commits — of the matches, under a `query` — and whether
  * there is one past them.
@@ -46,10 +64,11 @@ const FILTER_DELAY_MS = 250
  * `Show more` without a count of the whole history — a `rev-list --count` on a
  * large repository is the full walk this is paging to avoid.
  */
-async function readCommits(
+export async function readCommits(
   folderId: string,
   count: number,
-  query: string
+  query: string,
+  scope: GitLogScope
 ): Promise<{ commits: GitCommit[]; more: boolean }> {
   const wanted = count + 1
   const commits: GitCommit[] = []
@@ -59,7 +78,8 @@ async function readCommits(
       folderId,
       limit,
       commits.length,
-      query
+      query,
+      scope
     )
     commits.push(...page)
     if (page.length < limit) break
@@ -68,12 +88,14 @@ async function readCommits(
 }
 
 /**
- * The `Git` tab's `Commits` view: the branch the project has checked out,
- * newest first, `PAGE` at a time — filterable, marked where it is ahead of its
- * remote, and with each commit's files a click away.
+ * The `Git` tab's `Commits` view: the branch the project has checked out — or
+ * every branch, with `All branches` — newest first, `PAGE` at a time,
+ * filterable, marked where it is ahead of its remote, and with each commit's
+ * files a click away. **No graph**: that is the `Git Graph` tab, opened from
+ * the button beside the filter (`docs/design.md` § The commit graph).
  *
- * Still one branch and no graph. What it grew is what the question it answers
- * — "what has this branch had done to it lately" — kept running into: **which
+ * What it grew is what the question it answers — "what has this branch had
+ * done to it lately" — kept running into: **which
  * of these are pushed** (an arrow on the ones that are not, and `↑2 ↓1` over
  * the list), **what did that one change** (a commit opens into its files, and a
  * file opens in the checkout's one diff tab, the same tab `Changes` uses), and
@@ -104,27 +126,34 @@ export function CommitsList({ root }: { root: FileRoot }) {
     /** What was asked for, so a read still answering the last question is
      * told apart from one answering this one — see `loading`. */
     query: string
+    all: boolean
     count: number
     commits: GitCommit[]
     more: boolean
   } | null>(null)
-  /** How many are asked for — per filter, so a new word starts at the first
-   * page of its own matches. */
-  const [paged, setPaged] = useState({ query: "", count: PAGE })
-  const count = paged.query === query ? paged.count : PAGE
+  const all = useBranchScope((state) => state.all)
+  /** How many are asked for — per filter and per scope, so a new word or a
+   * flip of `All branches` starts at the first page of its own list. */
+  const [paged, setPaged] = useState({ query: "", all: false, count: PAGE })
+  const count = paged.query === query && paged.all === all ? paged.count : PAGE
 
   const status = useGitStatus((state) => state.byRoot[root.id])
   useEffect(() => {
     let current = true
-    void readCommits(root.folderId, count, query)
+    void readCommits(
+      root.folderId,
+      count,
+      query,
+      all ? { kind: "all", remotes: true } : { kind: "head" }
+    )
       .catch(() => ({ commits: [], more: false }))
       .then((answer) => {
-        if (current) setRead({ query, count, ...answer })
+        if (current) setRead({ query, all, count, ...answer })
       })
     return () => {
       current = false
     }
-  }, [root.folderId, status, count, query])
+  }, [root.folderId, status, count, query, all])
 
   const [upstream, setUpstream] = useState<GitUpstream | null>(null)
   /** Bumped by a push from the button, which moves the remote-tracking ref
@@ -169,40 +198,52 @@ export function CommitsList({ root }: { root: FileRoot }) {
   // A new filter keeps the last list on screen, dimmed, until its own answer
   // lands, and `Show more` says so on its button; the re-reads a commit causes
   // ask for what is already shown, so they never read as loading.
-  const stale = read !== null && read.query !== query
+  const stale = read !== null && (read.query !== query || read.all !== all)
   const loading = read !== null && !stale && read.count !== count
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 space-y-1.5 border-b bg-background p-2">
-        <div className="flex h-7 items-center gap-1.5 rounded-md border bg-background px-2 focus-within:ring-1 focus-within:ring-ring">
-          <Search
-            aria-hidden
-            className="size-3.5 shrink-0 text-muted-foreground"
-          />
-          <input
-            value={typed}
-            onChange={(event) => setTyped(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Escape" && typed) {
-                event.preventDefault()
-                setTyped("")
-              }
-            }}
-            placeholder={t("files.commits.filterPlaceholder")}
-            spellCheck={false}
-            className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
-          />
-          {typed && (
-            <button
-              type="button"
-              aria-label={t("files.commits.clearFilter")}
-              onClick={() => setTyped("")}
-              className="shrink-0 text-muted-foreground hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          )}
+        <div className="flex items-center gap-1.5">
+          <div className="flex h-7 min-w-0 flex-1 items-center gap-1.5 rounded-md border bg-background px-2 focus-within:ring-1 focus-within:ring-ring">
+            <Search
+              aria-hidden
+              className="size-3.5 shrink-0 text-muted-foreground"
+            />
+            <input
+              value={typed}
+              onChange={(event) => setTyped(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape" && typed) {
+                  event.preventDefault()
+                  setTyped("")
+                }
+              }}
+              placeholder={t("files.commits.filterPlaceholder")}
+              spellCheck={false}
+              className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            />
+            {typed && (
+              <button
+                type="button"
+                aria-label={t("files.commits.clearFilter")}
+                onClick={() => setTyped("")}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <BranchScopeToggle />
+          <button
+            type="button"
+            title={t("files.commits.openGraph")}
+            aria-label={t("files.commits.openGraph")}
+            onClick={() => useGitGraph.getState().open(root.id)}
+            className="flex size-7 shrink-0 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+          >
+            <GitGraph aria-hidden className="size-3.5" />
+          </button>
         </div>
         <UpstreamLine
           upstream={upstream}
@@ -250,7 +291,7 @@ export function CommitsList({ root }: { root: FileRoot }) {
               <button
                 type="button"
                 disabled={loading}
-                onClick={() => setPaged({ query, count: count + PAGE })}
+                onClick={() => setPaged({ query, all, count: count + PAGE })}
                 className="mx-3 mt-1 flex h-7 w-[calc(100%-1.5rem)] items-center justify-center rounded-md text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground disabled:opacity-60"
               >
                 {loading
@@ -262,6 +303,30 @@ export function CommitsList({ root }: { root: FileRoot }) {
         )}
       </div>
     </div>
+  )
+}
+
+/** `All branches`, beside the filter: lit while the list is every branch. */
+function BranchScopeToggle() {
+  const t = useT()
+  const all = useBranchScope((state) => state.all)
+  return (
+    <button
+      type="button"
+      aria-pressed={all}
+      title={
+        all ? t("files.commits.currentBranch") : t("files.commits.allBranches")
+      }
+      onClick={() => useBranchScope.getState().toggle()}
+      className={cn(
+        "flex size-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+        all
+          ? "border-primary/40 bg-primary/10 text-primary"
+          : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+      )}
+    >
+      <GitBranch aria-hidden className="size-3.5" />
+    </button>
   )
 }
 
@@ -430,69 +495,62 @@ function CommitRow({
   onMenu: () => void
 }) {
   const t = useT()
+  const head = commit.refs.some((ref) => ref.head)
   return (
     <li>
+      {/* The `Git Graph` tab's row folded into a sidebar's width: its
+          description and date on one line, its author and hash on the next,
+          the same chips and the same marks, so a commit reads the same in
+          either. */}
       <button
         type="button"
         onClick={onToggle}
         onContextMenu={onMenu}
         aria-expanded={open}
         title={`${commit.subject}\n\n${commit.hash}\n${commit.author} — ${new Date(commit.date).toLocaleString()}`}
-        className="flex w-full items-start gap-1 py-1.5 pr-3 pl-1.5 text-left hover:bg-accent/50"
+        className={cn(
+          "flex w-full flex-col gap-0.5 px-3 py-1.5 text-left",
+          open ? "bg-accent/40" : "hover:bg-accent/50"
+        )}
       >
-        <ChevronRight
-          aria-hidden
-          className={cn(
-            "mt-0.5 size-3.5 shrink-0 text-muted-foreground transition-transform",
-            open && "rotate-90"
+        <span className="flex w-full min-w-0 items-center gap-1.5 text-xs">
+          <RefChips refs={commit.refs} max={2} />
+          <span
+            className={cn("min-w-0 flex-1 truncate", head && "font-medium")}
+          >
+            {commit.subject}
+          </span>
+          <span className="shrink-0 text-[0.65rem] text-muted-foreground tabular-nums">
+            {since(commit.date)}
+          </span>
+        </span>
+        <span className="flex w-full min-w-0 items-center gap-1.5 text-[0.65rem] text-muted-foreground">
+          <span className="min-w-0 truncate">{commit.author}</span>
+          {unpushed && (
+            <ArrowUp
+              aria-label={
+                upstreamName
+                  ? t("files.commits.notPushedTo", { name: upstreamName })
+                  : t("files.commits.notOnAnyRemote")
+              }
+              className="size-3 shrink-0 text-primary"
+            />
           )}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="min-w-0 flex-1 truncate text-xs">
-              {commit.subject}
-            </span>
-            {commit.refs.map((ref) => (
-              <Ref key={ref} name={ref} />
-            ))}
-          </span>
-          <span className="flex min-w-0 items-center gap-1.5 text-[0.65rem] text-muted-foreground">
-            {/* Amber, the colour `git log` itself gives a hash — the one
-                thing on the row somebody copies, so it should be the one
-                they find without reading the line. */}
-            <span className="shrink-0 rounded bg-amber-500/10 px-1 font-mono font-medium text-amber-600 dark:text-amber-400">
-              {commit.shortHash}
-            </span>
-            {unpushed && (
-              <span
-                title={
-                  upstreamName
-                    ? t("files.commits.notPushedTo", { name: upstreamName })
-                    : t("files.commits.notOnAnyRemote")
-                }
-                className="flex shrink-0 items-center text-primary"
-              >
-                <ArrowUp
-                  aria-label={t("files.commits.notPushed")}
-                  className="size-3"
-                />
-              </span>
-            )}
-            <span className="min-w-0 truncate">{commit.author}</span>
-            <span className="ml-auto shrink-0 tabular-nums">
-              {since(commit.date)}
-            </span>
-          </span>
+          <span className="ml-auto shrink-0 font-mono">{commit.shortHash}</span>
         </span>
       </button>
 
-      {open && <CommitFiles commit={commit} root={root} files={files} />}
+      {open && (
+        <div className="border-y bg-muted/20 py-1">
+          <CommitFiles commit={commit} root={root} files={files} />
+        </div>
+      )}
     </li>
   )
 }
 
 /** A commit's files, under it — each opening in the checkout's diff tab. */
-function CommitFiles({
+export function CommitFiles({
   commit,
   root,
   files,
@@ -577,7 +635,7 @@ function CommitFiles({
  * chat about it, open it on the forge — absent rather than greyed where
  * `origin` is not one `webUrlOf` can address.
  */
-function CommitMenu({
+export function CommitMenu({
   commit,
   webUrl,
 }: {
@@ -631,24 +689,6 @@ function CommitMenu({
         </ContextMenuItem>
       )}
     </ContextMenuContent>
-  )
-}
-
-/** One ref beside a subject. `HEAD -> main` is drawn as `main` in the
- * primary hue, since "where I am" is the one a reader is looking for. */
-function Ref({ name }: { name: string }) {
-  const head = name.startsWith("HEAD -> ")
-  const label = head ? name.slice("HEAD -> ".length) : name
-
-  return (
-    <span
-      className={cn(
-        "max-w-24 shrink-0 truncate rounded px-1 font-mono text-[0.6rem]",
-        head ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-      )}
-    >
-      {label}
-    </span>
   )
 }
 

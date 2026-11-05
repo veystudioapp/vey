@@ -1,6 +1,7 @@
 import { chatRootId } from "@shared/api"
 
 import { useChanges } from "./files/changes"
+import { useGitGraph } from "./files/git-graph"
 import { useFiles } from "./files/store"
 import { fileRoots, rootOfPath, shownRootOf } from "./files/roots"
 import { useProjects } from "./projects"
@@ -97,6 +98,13 @@ const changesActive = (
     ? state.selectedId
     : null
 
+const graphActive = (
+  state: ReturnType<typeof useGitGraph.getState>
+): string | null =>
+  state.selectedId && state.openIds.includes(state.selectedId)
+    ? state.selectedId
+    : null
+
 /**
  * The **root** a file is in: a workspace folder (`lib/files/roots.ts`, which
  * takes the longest match — a folder added inside another one is still a
@@ -128,6 +136,17 @@ const PANELS: Record<Pane, PanelTabs> = {
     // The tab's id **is** the root's, so this is the identity — an
     // `Changes` tab is about one project and belongs in the strip exactly
     // while that project is the one being worked in.
+    rootOf: (id) => id,
+  },
+  graph: {
+    open: () => useGitGraph.getState().openIds,
+    active: () => graphActive(useGitGraph.getState()),
+    select: (id) => useGitGraph.getState().select(id),
+    close: (id) => useGitGraph.getState().close(id),
+    closeOthers: (id) => useGitGraph.getState().closeOthers(id),
+    closeAll: () => useGitGraph.getState().closeAll(),
+    reorder: (ids) => useGitGraph.getState().reorder(ids),
+    // A root id, as `changes`'s is.
     rootOf: (id) => id,
   },
   files: {
@@ -390,6 +409,7 @@ function usePanelActive(pane: Pane): string | null {
   return {
     files: useFiles(fileActive),
     changes: useChanges(changesActive),
+    graph: useGitGraph(graphActive),
     chat: useChats(chatActive),
   }[pane]
 }
@@ -428,6 +448,8 @@ export function useHasOpenTabs(): boolean {
   useFiles((state) => state.openIds)
   useChats((state) => state.openIds)
   useChats((state) => state.chats)
+  useChanges((state) => state.openIds)
+  useGitGraph((state) => state.openIds)
 
   // Every pane in `PANES`, and the reason this is worth saying: a panel left out
   // of that list can never be drawn. The workbench only shows a pane once the

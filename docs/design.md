@@ -1354,10 +1354,10 @@ gated twice (`ipc.ts` and `main/git.ts`) and ends by re-reading git.
 
 ### Commits
 
-The checked-out branch's commits, twenty at a time with `Show 20 more`
-(`log`, one extra row asked to know whether more exist). Read-only, one branch,
-no graph. Re-read off the same git signal as `Changes`, so a commit in the
-dock's shell lands without Refresh.
+The checked-out branch's commits — or every branch's (§ The commit graph) —
+twenty at a time with `Show 20 more` (`log`, one extra row asked to know
+whether more exist). Read-only. Re-read off the same git signal as `Changes`,
+so a commit in the dock's shell lands without Refresh.
 
 **It now opens a commit, which reverses "no commit diff".** The list answered
 "what has this branch had done to it lately" and stopped one question short —
@@ -1393,8 +1393,127 @@ Three more, each something a reader kept leaving the list for:
 - **The blame card's menu** on a row — copy SHA or message, `Ask in chat`
   (typed, unsent), open on the forge.
 
-Still refused: other branches, a graph, checkout, revert, cherry-pick — the
-dock's shell is the git client.
+Still refused: checkout, revert, cherry-pick — the dock's shell is the git
+client.
+
+### The commit graph
+
+**This reverses "one branch, no graph".** History is drawn as a graph — a dot
+per commit in its lane, a lane per line of work, bends where one branches off
+and comes back, a ring for a merge — in the **`Git Graph` tab** (below), and
+an `All branches` toggle beside the `Commits` filter widens that list from the
+checked-out branch to every local branch, remote-tracking branch and tag.
+
+**The `Commits` view itself draws no graph.** It did, a lane down the left of
+each row, and it was taken off once the tab existed: a sidebar's width holds
+one lane legibly and little more, the tab draws the same history with room,
+and the line down a straight branch was ink saying nothing.
+
+The list without it answered "what happened on this branch" and could not say
+**where a commit came from**: a merge's twenty commits read as twenty commits on
+`main`, and the branch a teammate pushed this morning was not there at all
+without a `git log --graph --all` in the dock's shell, which is the question
+the view exists to save a trip for. A graph is still a reading of history, not
+a client — nothing on it checks out, merges or moves a ref.
+
+- **Drawn from `%P`**, the parents the log already walks — one field more, no
+  second git call. The lanes are computed in the renderer
+  (`lib/files/commit-graph.ts`, `test/commit-graph.ts`) over the commits as
+  listed, so a page's last lanes run off the bottom until `Show more` reads the
+  parents they wait for.
+- **`--date-order`, not git's plain order.** The plain order was tried first,
+  to spare the walk `--date-order` makes before its first line wherever there
+  is no commit-graph file, and it drew broken graphs: two commits with one
+  timestamp — a rebase, a script committing twice in a second — could come out
+  parent first, and the child's lane had nowhere to go but to end in mid-air.
+  `--date-order` is the same dates with "no parent before its children"
+  promised. A filtered log, which draws no graph, keeps the plain order and
+  streams.
+- **Not `--all`**: `--branches --remotes --tags HEAD`. `--all` walks
+  `refs/stash`, whose commits are a working tree's index drawn as branches
+  nobody made, and `refs/notes/*`, which is not the project's history.
+- **No graph under a filter.** The matches are commits with the history between
+  them taken out, and a lane drawn across a gap joins two commits that are not
+  parent and child. The filter does search every branch when the toggle is on.
+- Lane colours are fixed hues, the first the palette's primary, since some
+  palettes make the chart colours greys.
+- **The toggle is held for the session**, across projects, and not written
+  down.
+
+### The Git Graph tab
+
+The same history with room: a tab in the pane strip (`graph`, one per
+checkout, its id the root's — the shape the `Changes` tab has), opened from
+the graph button beside the `Commits` filter. A table — **Graph,
+Description, Date, Author, Commit**, one line a commit — over every branch by
+default, with a `Branches` list to narrow it to the checked-out one or to
+**any set of** local and remote-tracking branches, ticked together and drawn
+together, and `Show Remote Branches` to take the remotes out of "every". The Explorer's view stayed: it answers "what did this
+branch just do" without leaving the files, and a sidebar has no room for four
+columns and ten lanes side by side.
+
+- **A ref is read with its kind** (`--decorate=full`, `refOf`), so a chip can
+  say branch, remote-tracking branch or tag — a local `backup/x` and the remote
+  `origin/x` are otherwise the same shape of string.
+- **Fewer chips than refs** (`lib/files/ref-chips.ts`, `test/ref-chips.ts`,
+  drawn by `files/ref-chip.tsx` in both views). `origin/main` beside `main` on
+  one commit is one chip, `main` with a cloud; `origin/HEAD` is dropped, being
+  the remote's pointer at a branch already chipped. The `Commits` view shows
+  two and a `+n` naming the rest: in a sidebar, five chips were the difference
+  between a subject and none.
+- **The `Commits` view's row is this table folded in two** — chips, subject
+  and age on the first line, author, the unpushed arrow and the hash on the
+  second — in the tab's marks: the same chips, the checked-out branch's
+  subject in medium weight, the hash a muted monospace rather than an amber
+  pill, an open commit tinted the way a selected one is here. The age stays
+  relative (`45m`, `1d`) where the tab gives the date, since the sidebar has
+  room for one and the full date is on hover.
+- **The scope is a type on the wire** (`GitLogScope`), and a picked branch is a
+  full `refs/…` name, narrowed in main (`logScopeOf`): a string from the
+  renderer that git could read as an option or a range is dropped, and a pick
+  with nothing left is the checked-out branch. `--ignore-missing`, so a branch
+  deleted since it was ticked drops out rather than emptying the graph.
+- **The list is ticks** (`lib/files/branch-pick.ts`, `test/branch-pick.ts`),
+  with a filter over them. `Show All` and `Current branch` stand alone —
+  ticking either clears the branches, ticking a branch clears them — and
+  taking the last tick off is every branch again, never a graph of nothing.
+  Several branches read as `main +2` in the button.
+- **Uncommitted Changes** is a row over `HEAD` while the checkout has any — a
+  grey ring and a dashed line, fed to the lane algorithm as a commit whose one
+  parent is `HEAD` — and it is **picked like a commit**: its files open in the
+  panel under the list, `Staged` and `Changes` as the Explorer piles them, each
+  opening the checkout's diff tab, read off the `Changes` list's own store so
+  nothing asks git twice. It only opened the Explorer's `Changes` list at
+  first, and with the Explorer already there a click on it did nothing anybody
+  could see. Staging and committing stay that list's: `Stage & commit…` in the
+  panel goes to it.
+- **The columns are dragged by their borders** (`lib/files/graph-columns.ts`,
+  `test/graph-columns.ts`), the border following the pointer: the columns on
+  either side trade width, Description stretches to take what the others give
+  up, each has a floor, and a double-click resets them all. Kept as a setting
+  (`graphColumns`). A graph column dragged narrower than its lanes cuts the
+  outer ones off rather than drawing them over the descriptions.
+- **One drawing, fixed rows.** The graph is a single SVG over rows of one
+  height (`CommitGraphCanvas`, off `graphSegments`), each line running dot to
+  dot and bending across the whole gap. It was a slice per row first, the
+  Explorer's way, and read as kinked: a slice can only bend inside its own half
+  row, and two slices meet at a seam.
+- **A commit opens in a panel under the list**, not under its row: its line,
+  hash, author, date, parents and files, at a fixed height, so picking one —
+  or walking with ↑/↓, Esc to close — never moves a row. Spliced in under the
+  row it pushed everything below down by the length of the commit. A file
+  opens the checkout's diff tab, as from the `Commits` view. Its top edge drags,
+  the Accounts foot's way — a double-click resets it — and the height is kept
+  as a setting (`graphDetailsHeight`), never more than 85% of the tab.
+- **Re-reads that change nothing draw nothing.** The log is re-read on every
+  status change, which during an agent's turn is every saved file; an answer
+  with the same commits and refs keeps the one on screen, and the rows are
+  memoised. The next page is asked for before the end is reached, and a new
+  branch or filter dims the list only once it has taken a moment. The right-click menu is
+  that view's. **Nothing here writes** — no checkout, branch, merge or tag from
+  a row, which is still the dock's shell's.
+- Refresh is a button as well as the status signal: a fetch in another app moves
+  the remote-tracking refs without touching anything watched.
 
 ### Who last changed a line
 

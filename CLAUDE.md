@@ -133,7 +133,9 @@ imports may reach `electron`.
   is ending a reading of the diff rather than writing a paragraph in a panel with
   no room for one. **`log` is the read of history** — the checked-out
   branch's commits a page at a time (`--skip`, or a streamed filter) for the
-  `Commits` view, with `upstream` for what is not pushed and `commitFiles` /
+  `Commits` view, or every branch's under its `All branches` toggle, each with
+  its parents for the `Git Graph` tab's lanes (`lib/files/commit-graph.ts`,
+  `test/commit-graph.ts`; `docs/design.md` § The commit graph), with `upstream` for what is not pushed and `commitFiles` /
   `commitFileDiff` to open a commit into the checkout's one diff tab, both
   sides out of the object store; nothing written (`docs/design.md` § Commits). **`blame` is the second**, one per file
   with the editor's buffer on stdin, for the current-line annotation
@@ -570,7 +572,11 @@ views in a row under it — `Changes` and `Commits` (`ExplorerTab` and `GitView`
 in `lib/store.ts`; a strip saved on the old `changes`/`commits` tabs reads back
 as `Git` at that view). `commits-list.tsx` is re-read off the same git status
 signal the `Changes` list is, so a commit in the dock's shell lands without
-Refresh. **There are no comments on a diff** — the `+` column, the
+Refresh. Its graph button opens the **`Git Graph` tab** — a pane of its
+own (`graph` in `PANES`, `PREFIX`, `PANELS`; one per checkout, the id the
+root's, `lib/files/git-graph.ts`, `files/git-graph-pane.tsx`): a table of
+every branch's history with the lanes, ref chips by kind (`GitRef`) and a
+`Branches` list sent as a `GitLogScope` (`docs/design.md` § The Git Graph tab). **There are no comments on a diff** — the `+` column, the
 threads, the `Comments` tab and the badges are deleted (`docs/design.md`
 § Comments, removed); nothing reads `workspace/review.json` any more.
 A project's `Recent` chats show the newest **20** (`CHAT_LIMIT` in

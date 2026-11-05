@@ -57,6 +57,7 @@ import {
 import {
   changes,
   log,
+  logScopeOf,
   commit,
   commitFileDiff,
   commitFiles,
@@ -1157,13 +1158,15 @@ export function createIpc(host: Host): {
       folderId: string,
       limit: number,
       skip = 0,
-      query: unknown = ""
+      query: unknown = "",
+      scope: unknown = null
     ) =>
       log(
         await store.resolveFolderDir(folderId),
         Math.max(1, Math.min(MAX_LOG_PAGE, Math.floor(limit) || 1)),
         Math.max(0, Math.floor(skip) || 0),
-        typeof query === "string" ? query : ""
+        typeof query === "string" ? query : "",
+        logScopeOf(scope)
       )
   )
 

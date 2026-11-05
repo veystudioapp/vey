@@ -1,5 +1,6 @@
 import { create } from "zustand"
 
+import type { GraphColumns } from "./files/graph-columns"
 import { TELEMETRY_KEY, type ChatEffort } from "@shared/api"
 import {
   DEFAULT_APPEARANCE,
@@ -103,6 +104,17 @@ type Stored = {
    * edge — in pixels, or null for its own height up to a share of the column.
    */
   accountsHeight: number | null
+  /**
+   * The `Git Graph` tab's commit panel, dragged taller or shorter by its top
+   * edge — in pixels, or null for its own share of the tab.
+   */
+  graphDetailsHeight: number | null
+  /**
+   * The `Git Graph` tab's column widths, dragged by their borders — null for
+   * the defaults. Kept loose here and narrowed where it is read
+   * (`graphColumnsOf`), so one bad width costs that width, not the record.
+   */
+  graphColumns: Record<string, unknown> | null
   /** The Accounts foot folded down to its heading. */
   accountsCollapsed: boolean
   /**
@@ -170,6 +182,13 @@ function isStored(value: unknown): value is Stored {
     (record.accountsHeight === undefined ||
       record.accountsHeight === null ||
       typeof record.accountsHeight === "number") &&
+    (record.graphColumns === undefined ||
+      record.graphColumns === null ||
+      (typeof record.graphColumns === "object" &&
+        !Array.isArray(record.graphColumns))) &&
+    (record.graphDetailsHeight === undefined ||
+      record.graphDetailsHeight === null ||
+      typeof record.graphDetailsHeight === "number") &&
     (record.accountsCollapsed === undefined ||
       typeof record.accountsCollapsed === "boolean") &&
     (record.defaultAccountLabel === undefined ||
@@ -211,6 +230,8 @@ type SettingsState = Stored & {
   setGitBlame: (on: boolean) => void
   setComposerHeight: (height: number | null) => void
   setAccountsHeight: (height: number | null) => void
+  setGraphDetailsHeight: (height: number | null) => void
+  setGraphColumns: (columns: GraphColumns | null) => void
   setAccountsCollapsed: (collapsed: boolean) => void
   /** Null gives the default login its address back. */
   setDefaultAccountLabel: (label: string | null) => void
@@ -263,6 +284,8 @@ export const useSettings = create<SettingsState>((set, get) => {
       allProjectTabs,
       composerHeight,
       accountsHeight,
+      graphDetailsHeight,
+      graphColumns,
       accountsCollapsed,
       defaultAccountLabel,
       language,
@@ -287,6 +310,8 @@ export const useSettings = create<SettingsState>((set, get) => {
       allProjectTabs,
       composerHeight,
       accountsHeight,
+      graphDetailsHeight,
+      graphColumns,
       accountsCollapsed,
       defaultAccountLabel,
       language,
@@ -316,6 +341,8 @@ export const useSettings = create<SettingsState>((set, get) => {
     allProjectTabs: false,
     composerHeight: null,
     accountsHeight: null,
+    graphDetailsHeight: null,
+    graphColumns: null,
     accountsCollapsed: false,
     defaultAccountLabel: null,
     language: "system",
@@ -414,6 +441,16 @@ export const useSettings = create<SettingsState>((set, get) => {
 
     setAccountsHeight(accountsHeight) {
       set({ accountsHeight })
+      save()
+    },
+
+    setGraphColumns(graphColumns) {
+      set({ graphColumns })
+      save()
+    },
+
+    setGraphDetailsHeight(graphDetailsHeight) {
+      set({ graphDetailsHeight })
       save()
     },
 

@@ -158,10 +158,33 @@ export type GitCommit = {
   author: string
   /** The author date, ISO 8601. */
   date: string
-  /** What points at it — `HEAD -> main`, `origin/main`, `tag: v1.0` — as git
-   * prints them. Empty for most commits. */
-  refs: string[]
+  /** What points at it — `HEAD -> main`, `origin/main`, `tag: v1.0` — read
+   * into a name and a kind. Empty for most commits. */
+  refs: GitRef[]
+  /** Its parents' full hashes, first parent first — none for a root commit,
+   * two or more for a merge. What the graph is drawn from. */
+  parents: string[]
 }
+
+/** One ref pointing at a commit — see `refOf` in `main/git.ts`. */
+export type GitRef = {
+  /** As a reader names it: `main`, `origin/main`, `v1.0`. */
+  name: string
+  /** `head` is a detached `HEAD`, the one ref that is neither. */
+  kind: "branch" | "remote" | "tag" | "head"
+  /** The branch checked out, or the detached `HEAD` itself. */
+  head?: boolean
+}
+
+/**
+ * Which history `gitLog` walks: the branch checked out, every branch (with or
+ * without the remote-tracking ones), or the branches picked, by their full
+ * names — `refs/heads/main`, `refs/remotes/origin/main` — drawn together.
+ */
+export type GitLogScope =
+  | { kind: "head" }
+  | { kind: "all"; remotes: boolean }
+  | { kind: "branches"; refs: string[] }
 
 /**
  * Where the checked-out branch stands against its remote — see `upstream` in
@@ -2277,16 +2300,18 @@ export type DesktopApi = {
   gitChanges: (folderId: string) => Promise<GitChange[]>
 
   /**
-   * Up to `limit` commits of the branch checked out in one folder, newest
-   * first, after the newest `skip` — one page of the `Commits` view. Empty for
-   * a folder that is not a repository, has no commit yet, or has nothing past
-   * `skip`. A `query` pages through the matches alone — see `commitMatches`.
+   * Up to `limit` commits of one folder's history — the branch checked out
+   * unless a `scope` says otherwise — newest first, after the newest `skip`:
+   * one page of the `Commits` view or the `Git Graph` tab. Empty for a folder
+   * that is not a repository, has no commit yet, or has nothing past `skip`. A
+   * `query` pages through the matches alone — see `commitMatches`.
    */
   gitLog: (
     folderId: string,
     limit: number,
     skip?: number,
-    query?: string
+    query?: string,
+    scope?: GitLogScope
   ) => Promise<GitCommit[]>
   /** The checked-out branch against its remote — see `GitUpstream`. Null for
    * a folder with no commit to compare. */

@@ -20,7 +20,7 @@ const STRIP_KEY = "workbench.strip"
  * a pane drawable at all, and a pane left out of it is one that can be selected
  * and never shown.
  */
-export const PANES: Pane[] = ["files", "changes", "chat"]
+export const PANES: Pane[] = ["files", "changes", "graph", "chat"]
 
 /**
  * `section` is held as a plain string rather than a `Section` on the way in: a
@@ -79,7 +79,7 @@ function isRememberedStrip(value: unknown): value is RememberedStrip {
  * (`lib/shell/store.ts`), and the agent half of what it was is a project's
  * chat.
  */
-export type Pane = Section | "chat" | "changes"
+export type Pane = Section | "chat" | "changes" | "graph"
 
 /**
  * Which of the Explorer's two lists is showing: the project's files, or the

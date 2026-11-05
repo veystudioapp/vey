@@ -1,7 +1,13 @@
-import { GitCompare, MessageSquare, ShieldQuestion } from "lucide-react"
+import {
+  GitCompare,
+  GitGraph,
+  MessageSquare,
+  ShieldQuestion,
+} from "lucide-react"
 
 import { Spinner } from "@/components/ui/spinner"
 import { useChanges } from "@/lib/files/changes"
+import { useGitGraph } from "@/lib/files/git-graph"
 import { isDeleted, isDirty, useFiles } from "@/lib/files/store"
 import { gitStateOf, GIT_TONES, useGitStatus } from "@/lib/files/git-status"
 import { nameOf } from "@/lib/files/paths"
@@ -36,6 +42,7 @@ export function useTabItems(): Map<string, TabStripItem> {
   const chatUnread = useChats((state) => state.unread)
 
   const changesOpenIds = useChanges((state) => state.openIds)
+  const graphOpenIds = useGitGraph((state) => state.openIds)
   const changesByRoot = useChanges((state) => state.byRoot)
 
   const fileOpenIds = useFiles((state) => state.openIds)
@@ -117,6 +124,21 @@ export function useTabItems(): Map<string, TabStripItem> {
       // reading zero is a thing to notice saying there is nothing to notice.
       note: count ? String(count) : undefined,
       title: folder ?? t("nav.tabs.changes"),
+    })
+  }
+
+  // `Git Graph`, one per checkout — named the way `Changes` is, and for the
+  // same reason.
+  for (const rootId of graphOpenIds) {
+    const folder = workspaceFolders.find((entry) => entry.id === rootId)?.name
+    add({
+      id: PREFIX.graph + rootId,
+      label:
+        allProjectTabs && folder
+          ? t("nav.tabs.graphIn", { folder })
+          : t("nav.tabs.graph"),
+      icon: <GitGraph className="size-3 shrink-0" />,
+      title: folder ?? t("nav.tabs.graph"),
     })
   }
 

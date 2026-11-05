@@ -60,8 +60,8 @@ const api: DesktopApi = {
   gitBranch: (folderId) => ipcRenderer.invoke(IPC.gitBranch, folderId),
   gitStatus: (folderId) => ipcRenderer.invoke(IPC.gitStatus, folderId),
   gitChanges: (folderId) => ipcRenderer.invoke(IPC.gitChanges, folderId),
-  gitLog: (folderId, limit, skip, query) =>
-    ipcRenderer.invoke(IPC.gitLog, folderId, limit, skip, query),
+  gitLog: (folderId, limit, skip, query, scope) =>
+    ipcRenderer.invoke(IPC.gitLog, folderId, limit, skip, query, scope),
   gitUpstream: (folderId) => ipcRenderer.invoke(IPC.gitUpstream, folderId),
   gitCommitFiles: (folderId, hash) =>
     ipcRenderer.invoke(IPC.gitCommitFiles, folderId, hash),

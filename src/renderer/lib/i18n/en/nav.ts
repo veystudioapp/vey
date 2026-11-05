@@ -51,6 +51,8 @@ export const nav = {
     deleted: "deleted",
     changes: "Changes",
     changesIn: "Changes · {folder}",
+    graph: "Git Graph",
+    graphIn: "Git Graph · {folder}",
     chatWaiting: "{title} — waiting for your answer",
     chatUnread: "{title} — answered since you last looked",
   },

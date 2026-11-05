@@ -12,6 +12,8 @@ import {
   commitMatches,
   fileAtHead,
   log,
+  logScopeOf,
+  refOf,
   recentSubjects,
   upstream,
 } from "../src/main/git"
@@ -276,7 +278,8 @@ async function main() {
   )
   check(
     "and the refs pointing at it",
-    commits[0]?.refs.includes("HEAD -> main") === true &&
+    JSON.stringify(commits[0]?.refs) ===
+      JSON.stringify([{ name: "main", kind: "branch", head: true }]) &&
       commits[1]?.refs.length === 0,
     commits.map((entry) => entry.refs)
   )
@@ -289,6 +292,120 @@ async function main() {
     page.map((entry) => entry.subject)
   )
   check("and is empty past the end", (await log(root, 2, 3)).length === 0)
+  check(
+    "each with its parents, for the graph",
+    commits[0]?.parents.join() === commits[1]?.hash &&
+      commits[2]?.parents.length === 0,
+    commits.map((entry) => entry.parents)
+  )
+
+  // A branch the checkout is not on, made without leaving `main` so the
+  // working tree the later sections read is untouched.
+  const side = (
+    await git(
+      root,
+      "commit-tree",
+      `${commits[1]!.hash}^{tree}`,
+      "-p",
+      commits[1]!.hash,
+      "-m",
+      "on a side branch"
+    )
+  ).trim()
+  await git(root, "branch", "side", side)
+  check(
+    "only the checked-out branch by default",
+    !(await log(root, 10)).some((entry) => entry.hash === side)
+  )
+  const all = { kind: "all", remotes: true } as const
+  const everything = await log(root, 10, 0, "", all)
+  check(
+    "and every branch over `all`",
+    everything.length === 4 &&
+      everything.some(
+        (entry) =>
+          entry.hash === side &&
+          entry.refs.some((ref) => ref.name === "side" && !ref.head)
+      ),
+    everything.map((entry) => [entry.subject, entry.refs])
+  )
+  check(
+    "which a filter searches too",
+    (await log(root, 10, 0, "side branch", all)).length === 1 &&
+      (await log(root, 10, 0, "side branch")).length === 0
+  )
+  const one = await log(root, 10, 0, "", {
+    kind: "branches",
+    refs: ["refs/heads/side"],
+  })
+  check(
+    "or one branch by its full name, with its history",
+    JSON.stringify(one.map((entry) => entry.subject)) ===
+      JSON.stringify(["on a side branch", "second", "first"]),
+    one.map((entry) => entry.subject)
+  )
+  const two = await log(root, 10, 0, "", {
+    kind: "branches",
+    refs: ["refs/heads/side", "refs/heads/main"],
+  })
+  check(
+    "or several, drawn together",
+    two.length === 4 &&
+      two.some((entry) => entry.hash === side) &&
+      two.some((entry) => entry.subject === "feat: the staged half"),
+    two.map((entry) => entry.subject)
+  )
+  const gone = await log(root, 10, 0, "", {
+    kind: "branches",
+    refs: ["refs/heads/deleted-since", "refs/heads/side"],
+  })
+  check(
+    "and a picked branch deleted since is skipped, not the whole log",
+    gone.length === 3 && gone[0]?.hash === side,
+    gone.map((entry) => entry.subject)
+  )
+  await git(root, "branch", "-D", "side")
+
+  section("what the graph is told about refs and scopes")
+
+  check(
+    "a local branch with a slash is still local",
+    JSON.stringify(refOf("refs/heads/backup/pre-squash")) ===
+      JSON.stringify({ name: "backup/pre-squash", kind: "branch" })
+  )
+  check(
+    "a remote-tracking branch, a tag and a detached HEAD each say so",
+    refOf("refs/remotes/origin/main").kind === "remote" &&
+      refOf("refs/remotes/origin/main").name === "origin/main" &&
+      refOf("tag: refs/tags/v1.0").name === "v1.0" &&
+      refOf("tag: refs/tags/v1.0").kind === "tag" &&
+      refOf("HEAD").head === true
+  )
+  check(
+    "a scope off the wire keeps a full refname",
+    JSON.stringify(
+      logScopeOf({
+        kind: "branches",
+        refs: ["refs/remotes/origin/main", "refs/heads/x", "refs/heads/x"],
+      })
+    ) ===
+      JSON.stringify({
+        kind: "branches",
+        refs: ["refs/remotes/origin/main", "refs/heads/x"],
+      })
+  )
+  check(
+    "and refuses anything git could read as an option or a range",
+    JSON.stringify(
+      logScopeOf({
+        kind: "branches",
+        refs: ["--output=/tmp/x", "refs/heads/ok", "refs/heads/a..b", "main"],
+      })
+    ) === JSON.stringify({ kind: "branches", refs: ["refs/heads/ok"] }) &&
+      logScopeOf({ kind: "branches", refs: ["--all"] }).kind === "head" &&
+      logScopeOf({ kind: "branches", refs: "refs/heads/x" }).kind === "head" &&
+      logScopeOf("all").kind === "head"
+  )
 
   section("filtering the Commits tab")
 

@@ -8,6 +8,8 @@ import type {
   GitBlameCommit,
   GitChange,
   GitCommit,
+  GitLogScope,
+  GitRef,
   GitCommitFile,
   GitCommitFileDiff,
   GitFileState,
@@ -1046,18 +1048,101 @@ const UNIT = "\x1f"
 const RECORD = "\x1e"
 
 /** `%D`: the refs pointing at the commit, so the row can say which is `HEAD`
- * and where `origin` is without a second call. */
-const LOG_FORMAT = `--pretty=format:%H${UNIT}%h${UNIT}%s${UNIT}%an${UNIT}%aI${UNIT}%D${RECORD}`
+ * and where `origin` is without a second call — under `--decorate=full`, so a
+ * local branch named `backup/x` is told apart from the remote `origin/x`
+ * (`refOf`). `%P`: its parents, which is everything the graph is drawn from. */
+const LOG_FORMAT = [
+  `--pretty=format:%H${UNIT}%h${UNIT}%s${UNIT}%an${UNIT}%aI${UNIT}%D${UNIT}%P${RECORD}`,
+  "--decorate=full",
+]
 
 /**
- * `limit` commits of the branch that is checked out, newest first, after
- * skipping the newest `skip` — a page of the Explorer's `Commits` tab.
+ * The revisions a `GitLogScope` walks.
  *
- * **Read-only, and a list rather than a client.** It is the one place this
- * module reads history at all, and it reads only the checked-out branch — no
- * graph, no other branches. `docs/design.md` § Commits has why a log was let
- * in when amend, branch and push still are not, and why a commit's files and
- * diffs were let in after it (`commitFiles`, `commitFileDiff`).
+ * Every branch is not `--all`, which also walks `refs/stash` — each stash two
+ * or three commits of a working tree's index, drawn as branches nobody made —
+ * and `refs/notes/*`, whose commits are not the project's history at all. So
+ * it is the branches and tags by name, and `HEAD` for a checkout on none of
+ * them.
+ *
+ * Picked branches are **full** refnames and nothing else, which is both what
+ * keeps `main` from meaning a tag of that name and what keeps a renderer's
+ * string from being read as an option: `refs/` cannot start one. With
+ * `--ignore-missing`, so a branch deleted since it was picked drops out of the
+ * graph rather than failing the whole log into an empty one.
+ */
+function scopeArgs(scope: GitLogScope): string[] {
+  switch (scope.kind) {
+    case "head":
+      return []
+    case "all":
+      return [
+        "--branches",
+        "--tags",
+        ...(scope.remotes ? ["--remotes"] : []),
+        "HEAD",
+      ]
+    case "branches":
+      return ["--ignore-missing", ...scope.refs]
+  }
+}
+
+/** How many branches one graph may be asked for — far past any picking by
+ * hand, short of a command line no platform will take. */
+const MAX_SCOPE_REFS = 200
+
+/** A plain `refs/heads|remotes|tags/…` name: nothing git could read as an
+ * option, a range or a revision expression. */
+function isPlainRef(ref: unknown): ref is string {
+  return (
+    typeof ref === "string" &&
+    /^refs\/(heads|remotes|tags)\/[^\s~^:?*[\\]+$/.test(ref) &&
+    !ref.includes("..") &&
+    !ref.endsWith("/") &&
+    !ref.endsWith(".lock")
+  )
+}
+
+/**
+ * A scope off the wire, or the checked-out branch for anything else — the
+ * channel's argument is the renderer's, and a ref that is not a plain
+ * `refs/…` name is dropped here rather than handed to git. Picked branches
+ * that all fail that are no pick at all.
+ */
+export function logScopeOf(value: unknown): GitLogScope {
+  if (typeof value !== "object" || value === null) return { kind: "head" }
+  const scope = value as Record<string, unknown>
+  if (scope.kind === "all")
+    return { kind: "all", remotes: scope.remotes === true }
+  if (scope.kind === "branches" && Array.isArray(scope.refs)) {
+    const refs = [...new Set(scope.refs.filter(isPlainRef))].slice(
+      0,
+      MAX_SCOPE_REFS
+    )
+    if (refs.length > 0) return { kind: "branches", refs }
+  }
+  return { kind: "head" }
+}
+
+/**
+ * `limit` commits of the branch that is checked out — or of every branch, or
+ * of one, as the `scope` says (`scopeArgs`) — newest first, after skipping the
+ * newest `skip`: a page of the Explorer's `Commits` view or of the `Git Graph`
+ * tab.
+ *
+ * **Read-only, and a list rather than a client.** Each commit carries its
+ * parents, which the renderer draws as the graph (`lib/files/commit-graph.ts`);
+ * nothing here checks out, merges or moves a ref. `docs/design.md` § Commits
+ * has why a log was let in when amend and branch still are not, and § The
+ * commit graph why a graph and other branches were let in after it.
+ *
+ * `--date-order`, which is git's own date order with one promise added: no
+ * parent before all of its children. Without it a parent and child with the
+ * same timestamp — a rebase, a script that commits twice in a second — could
+ * come out the wrong way round, and the graph had to end the child's line in
+ * mid-air. The cost is a walk before the first line wherever the repository
+ * has no commit-graph file, which git writes on `gc` by default. A filtered
+ * log keeps git's plain order: it draws no graph, and it streams.
  *
  * `query` narrows it to the commits `commitMatches` keeps, and the page is a
  * page **of the matches**: `skip` and `limit` count what is shown, not what was
@@ -1070,13 +1155,22 @@ export async function log(
   dir: string,
   limit: number,
   skip = 0,
-  query = ""
+  query = "",
+  within: GitLogScope = { kind: "head" }
 ): Promise<GitCommit[]> {
-  if (query.trim()) return logMatching(dir, limit, skip, query.trim())
+  const scope = scopeArgs(within)
+  if (query.trim()) return logMatching(dir, limit, skip, query.trim(), scope)
 
   let out: string
   try {
-    out = await git(dir, ["log", `-n${limit}`, `--skip=${skip}`, LOG_FORMAT])
+    out = await git(dir, [
+      "log",
+      `-n${limit}`,
+      `--skip=${skip}`,
+      "--date-order",
+      ...LOG_FORMAT,
+      ...scope,
+    ])
   } catch {
     return []
   }
@@ -1090,7 +1184,8 @@ export async function log(
 function parseLogRecord(raw: string): GitCommit | null {
   const record = raw.replace(/^\n/, "")
   if (!record) return null
-  const [hash, shortHash, subject, author, date, refs] = record.split(UNIT)
+  const [hash, shortHash, subject, author, date, refs, parents] =
+    record.split(UNIT)
   return {
     hash: hash ?? "",
     shortHash: shortHash ?? "",
@@ -1100,8 +1195,37 @@ function parseLogRecord(raw: string): GitCommit | null {
     refs: (refs ?? "")
       .split(", ")
       .map((ref) => ref.trim())
-      .filter(Boolean),
+      .filter(Boolean)
+      .map(refOf),
+    parents: (parents ?? "").split(" ").filter(Boolean),
   }
+}
+
+/**
+ * One entry of a full `%D` — `HEAD -> refs/heads/main`,
+ * `refs/remotes/origin/main`, `tag: refs/tags/v1.0`, or a bare `HEAD` when
+ * nothing is checked out — as a name and what kind of ref it is. Exported for
+ * `test/git-changes.ts`.
+ */
+export function refOf(entry: string): GitRef {
+  if (entry.startsWith("HEAD -> ")) {
+    const { name, kind } = refOf(entry.slice("HEAD -> ".length))
+    return { name, kind, head: true }
+  }
+  if (entry === "HEAD") return { name: "HEAD", kind: "head", head: true }
+  if (entry.startsWith("tag: ")) {
+    return {
+      name: entry.slice("tag: ".length).replace(/^refs\/tags\//, ""),
+      kind: "tag",
+    }
+  }
+  if (entry.startsWith("refs/heads/")) {
+    return { name: entry.slice("refs/heads/".length), kind: "branch" }
+  }
+  if (entry.startsWith("refs/remotes/")) {
+    return { name: entry.slice("refs/remotes/".length), kind: "remote" }
+  }
+  return { name: entry.replace(/^refs\//, ""), kind: "branch" }
 }
 
 /**
@@ -1134,7 +1258,8 @@ function logMatching(
   dir: string,
   limit: number,
   skip: number,
-  query: string
+  query: string,
+  scope: string[]
 ): Promise<GitCommit[]> {
   return new Promise((resolve) => {
     const found: GitCommit[] = []
@@ -1142,7 +1267,7 @@ function logMatching(
     let buffer = ""
     let done = false
 
-    const child = spawn("git", ["log", LOG_FORMAT], {
+    const child = spawn("git", ["log", ...LOG_FORMAT, ...scope], {
       cwd: dir,
       windowsHide: true,
     })
