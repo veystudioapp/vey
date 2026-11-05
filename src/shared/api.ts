@@ -2462,6 +2462,8 @@ export type DesktopApi = {
   trashPath: (target: string) => Promise<void>
   /** Shows it in Finder/Explorer/the desktop's file manager. */
   revealPath: (target: string) => Promise<void>
+  /** Opens it in the user's own VS Code, via the `code` CLI on their PATH. */
+  openInVscode: (target: string) => Promise<void>
   /**
    * Starts an OS drag of the file or folder, so it can be dropped outside the
    * app — Finder, Slack, a mail. Called from a `dragstart` the renderer has
@@ -3240,6 +3242,7 @@ export const IPC = {
   movePath: "files:move",
   trashPath: "files:trash",
   revealPath: "files:reveal",
+  openInVscode: "files:open-in-vscode",
   startDragPath: "files:start-drag",
   readImageFile: "files:read-image",
   writeImageFile: "files:write-image",

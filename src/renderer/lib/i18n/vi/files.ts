@@ -47,6 +47,8 @@ export const files: Messages["files"] = {
     couldNotCreate: "Không thể tạo.",
     couldNotRename: "Không thể đổi tên.",
     openWith: "Mở bằng",
+    openInVscode: "Mở bằng VS Code",
+    couldNotOpenInVscode: "Không thể mở bằng VS Code",
     newFile: "File mới",
     newFolder: "Thư mục mới",
     newTerminalHere: "Mở terminal tại đây",

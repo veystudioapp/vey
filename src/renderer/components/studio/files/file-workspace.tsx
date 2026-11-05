@@ -18,6 +18,7 @@ import {
   Save,
   X,
 } from "lucide-react"
+import { Vscode } from "@/components/ui/svgs/vscode"
 
 import { hasGitChange, useGitStatus } from "@/lib/files/git-status"
 import { parentOf, relativeTo } from "@/lib/files/paths"
@@ -328,6 +329,21 @@ export function FilePane({
           className="shrink-0"
         >
           <ExternalLink />
+        </IconButton>
+        <IconButton
+          label={t("files.tree.openInVscode")}
+          onClick={() =>
+            void window.desktop.openInVscode(path).catch((error: unknown) => {
+              setFailure(
+                error instanceof Error
+                  ? error.message
+                  : t("files.tree.couldNotOpenInVscode")
+              )
+            })
+          }
+          className="shrink-0"
+        >
+          <Vscode />
         </IconButton>
       </div>
 

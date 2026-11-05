@@ -111,6 +111,7 @@ const api: DesktopApi = {
     ipcRenderer.invoke(IPC.movePath, target, dirPath),
   trashPath: (target) => ipcRenderer.invoke(IPC.trashPath, target),
   revealPath: (target) => ipcRenderer.invoke(IPC.revealPath, target),
+  openInVscode: (target) => ipcRenderer.invoke(IPC.openInVscode, target),
   startDragPath: (target) => ipcRenderer.invoke(IPC.startDragPath, target),
   readImageFile: (filePath) => ipcRenderer.invoke(IPC.readImageFile, filePath),
   writeImageFile: (filePath, dataUrl) =>

@@ -46,6 +46,8 @@ export const files = {
     couldNotCreate: "Could not create that.",
     couldNotRename: "Could not rename that.",
     openWith: "Open with",
+    openInVscode: "Open in VS Code",
+    couldNotOpenInVscode: "Could not open that in VS Code",
     newFile: "New file",
     newFolder: "New folder",
     newTerminalHere: "New terminal here",

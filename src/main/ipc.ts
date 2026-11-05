@@ -34,6 +34,7 @@ import {
 } from "./claude-api"
 import { claudeVersions } from "./claude-version"
 import { claudeBinary } from "./claude-bin"
+import { openInVscode } from "./vscode"
 import { dataDir, migrateChatFiles, migrateLegacyDataDir } from "./data-dir"
 import {
   BROWSER_SERVER,
@@ -1488,6 +1489,10 @@ export function createIpc(host: Host): {
 
   handle(IPC.revealPath, async (_event, target: string) => {
     await host.reveal(await inWorkspace(target))
+  })
+
+  handle(IPC.openInVscode, async (_event, target: string) => {
+    await openInVscode(await inWorkspace(target))
   })
 
   handle(IPC.startDragPath, async (caller, target: string) => {

@@ -61,6 +61,7 @@ import {
   SquareTerminal,
   Trash2,
 } from "lucide-react"
+import { Vscode } from "@/components/ui/svgs/vscode"
 
 import type { FileEntry, WorkspaceFolder } from "@shared/api"
 import { changeCount, useChanges, useWatchChanges } from "@/lib/files/changes"
@@ -180,6 +181,7 @@ export function FileTree({ onAddFolder }: { onAddFolder: () => void }) {
   const menuFocus = useMenuFocusHandoff()
   const [dropDir, setDropDir] = useState<string | null>(null)
   const [dropError, setDropError] = useState<string | null>(null)
+  const [vscodeError, setVscodeError] = useState<string | null>(null)
   /** What `Copy` or `Cut` picked up for a later `Paste`. The app's own rather
    * than the OS clipboard, which holds text here — `Copy path` is already its —
    * and held across a switch of project, since pasting into another one is the
@@ -696,6 +698,20 @@ export function FileTree({ onAddFolder }: { onAddFolder: () => void }) {
             <ExternalLink />
             {t("files.reveal")}
           </ContextMenuItem>
+          <ContextMenuItem
+            onClick={() =>
+              void window.desktop
+                .openInVscode(menuTarget.entry.path)
+                .catch((error: unknown) => {
+                  setVscodeError(
+                    failureOf(error, t("files.tree.couldNotOpenInVscode"))
+                  )
+                })
+            }
+          >
+            <Vscode />
+            {t("files.tree.openInVscode")}
+          </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
             onClick={() => {
@@ -771,6 +787,25 @@ export function FileTree({ onAddFolder }: { onAddFolder: () => void }) {
               {t("files.tree.dropErrorTitle")}
             </AlertDialogTitle>
             <AlertDialogDescription>{dropError}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.close")}</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={vscodeError !== null}
+        onOpenChange={(next) => {
+          if (!next) setVscodeError(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t("files.tree.couldNotOpenInVscode")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{vscodeError}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t("common.close")}</AlertDialogCancel>
