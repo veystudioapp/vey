@@ -1688,13 +1688,41 @@ nobody pays.
 
 ## Updating
 
-A pill in the status bar when GitHub has a newer release. **Not
-`electron-updater`**: Squirrel.Mac will not replace an unsigned bundle. Instead,
-`main/updater.ts` checks `releases/latest` (at launch, then every six hours),
-downloads the `.dmg` itself with a progress bar, and runs the bundled
-`install.sh` **detached**, since the script quits the app. `isNewer` is numeric
-and strictly newer (`test/updates.ts`). Nothing pops up; skipping is per
-version.
+A pill in the status bar when GitHub has a newer release. `main/updater.ts`
+checks `releases/latest` (at launch, then every six hours); `isNewer` is
+numeric and strictly newer (`test/updates.ts`). Nothing pops up; skipping is
+per version.
+
+On **macOS** the button is **`electron-updater`**, which drives Squirrel.Mac
+(`main/electron-updates.ts`): it downloads the release's `-<arch>.zip` with a
+progress bar, Squirrel checks the new bundle's signature against the running
+app's designated requirement and stages it, and the app quits through its
+own `before-quit`. ShipIt then swaps the bundle in place and reopens it. The
+feed is the release's own download directory (`releaseFeedUrl`), pinned to
+the version the button was pressed for, not whatever is latest by then. So
+`release.yml` publishes the zips and `latest-mac.yml` beside the dmgs, and
+`package.json` carries a `publish` block that is never uploaded through,
+because that is what makes electron-builder write `latest-mac.yml` and the
+bundle's `app-update.yml`. A differential download is turned off: it reports
+no progress, and the bar is what the wait has to show.
+
+It used to be the other way round. While the builds were unsigned, Squirrel
+would not replace them, so the app downloaded the `.dmg` and ran a bundled
+`install.sh` detached, the same script the README once told people to pipe
+into `bash`, because `curl` sets no quarantine flag. Once the builds were
+signed and notarized, that reason was gone, and the script had three faults
+the signing brought out. It asked the app to quit with a `quit app` Apple Event
+from a child of a hardened-runtime app with no Apple Events entitlement, and
+its error went to `/dev/null`. It waited for the quit with a `pgrep` on the
+executable's name, which the pty daemon (the same binary, alive a minute after
+the app) always matched, so it went ahead after five seconds whether or not
+the app was gone. And the app reopened `/Applications/Vey.app`, the name from
+the rename below, while the bundle actually installed was `Vey Studio.app`:
+the 0.0.4 update installed and never came back. It also verified nothing
+about who built what it copied. `install.sh` is **deleted**. A build up to
+0.0.4 still updates through its own bundled copy, which is why the releases
+keep their `-<arch>.dmg`. Those builds still will not reopen on their own,
+once.
 
 **After** an update, one thing does: the first launch on a new build opens
 `whats-new-dialog.tsx` with the notes of every release since the build last

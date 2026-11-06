@@ -24,10 +24,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macOS builds both architectures: `mac.target` in package.json
-          # declares arm64 and x64, and install.sh picks between them by
-          # filename. Deliberately not a universal build, which would double
-          # every download so that nobody has to choose.
+          # macOS builds both architectures in one run: `mac.target` in
+          # package.json declares arm64 and x64, so the one latest-mac.yml it
+          # writes lists both zips and electron-updater picks by name.
+          # Deliberately not a universal build, which would double every
+          # download so that nobody has to choose.
           - os: macos-latest
             name: macos
             target: --mac
@@ -146,9 +147,14 @@ jobs:
           name: installers-${{ matrix.name }}
           # electron-builder writes blockmaps, a builder-debug.yml and the
           # unpacked tree next to the installers; only the installers are the
-          # release.
+          # release. The macOS zips and latest-mac.yml are the in-app update's
+          # (`electron-updates.ts`); the dmgs stay, both for a first install
+          # and for builds up to 0.0.4, whose updater looks for an
+          # `-<arch>.dmg`. No blockmaps: the update downloads whole files.
           path: |
             release/*.dmg
+            release/*.zip
+            release/latest-mac.yml
             release/*.AppImage
             release/*.exe
           if-no-files-found: error
@@ -174,8 +180,7 @@ jobs:
           merge-multiple: true
 
       # The installers are published to this repository, next to the source
-      # they were built from — where the app's updater, install.sh and the
-      # site look. They went to a releases-only repository
+      # they were built from — where the app's updater and the site look. They went to a releases-only repository
       # (`vey-studio-releases`) while the source was private, which needed a
       # token of its own; `github.token` writes here.
       # The notes are the commit subjects since the previous tag, written out

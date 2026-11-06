@@ -12,6 +12,7 @@
 import {
   installerAsset,
   notesBetween,
+  releaseFeedUrl,
   windowsInstallerArgs,
 } from "../src/main/updater"
 import { downloadPercent, installLabel } from "../src/renderer/lib/updates"
@@ -87,16 +88,12 @@ const release = {
 }
 
 check(
-  "picks this arch's dmg",
-  installerAsset(release, "darwin", "arm64")?.url === "arm"
-)
-check(
-  "and the other one",
-  installerAsset(release, "darwin", "x64")?.url === "x64"
-)
-check(
   "Windows gets the .exe, not a .dmg of the same arch",
   installerAsset(release, "win32", "x64")?.url === "exe"
+)
+check(
+  "macOS is not picked here — Squirrel reads latest-mac.yml",
+  installerAsset(release, "darwin", "arm64") === null
 )
 check(
   "a blockmap beside the .exe is not the installer",
@@ -107,28 +104,36 @@ check(
   installerAsset(release, "linux", "x64") === null
 )
 check(
-  "a .zip of the right arch is not a .dmg",
-  installerAsset({ assets: [release.assets[2]] }, "darwin", "arm64") === null
-)
-check(
   "an arch with no build is null, not the first asset going",
-  installerAsset(release, "darwin", "riscv") === null
+  installerAsset(release, "win32", "arm64") === null
 )
 check(
   "a release with no assets",
-  installerAsset({ assets: [] }, "darwin", "arm64") === null
+  installerAsset({ assets: [] }, "win32", "x64") === null
 )
 check(
   "and one that is not a release at all",
-  installerAsset(null, "darwin", "arm64") === null
+  installerAsset(null, "win32", "x64") === null
 )
 check(
   "a missing size reads as unknown rather than throwing",
   installerAsset(
-    { assets: [{ name: "a-arm64.dmg", browser_download_url: "u" }] },
-    "darwin",
-    "arm64"
+    { assets: [{ name: "a-x64.exe", browser_download_url: "u" }] },
+    "win32",
+    "x64"
   )?.size === 0
+)
+
+section("releaseFeedUrl")
+
+check(
+  "the release's own download directory, under its v tag",
+  releaseFeedUrl("0.0.5") ===
+    "https://github.com/veystudioapp/vey/releases/download/v0.0.5"
+)
+check(
+  "a version that already carries its v is not given two",
+  releaseFeedUrl("v0.0.5").endsWith("/download/v0.0.5")
 )
 
 section("windowsInstallerArgs")

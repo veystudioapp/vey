@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from "node:child_process"
-import { closeSync, createWriteStream, mkdirSync, openSync } from "node:fs"
+import { createWriteStream } from "node:fs"
 import { mkdir, rm } from "node:fs/promises"
 import path from "node:path"
 import { Readable } from "node:stream"
@@ -11,26 +11,24 @@ import { isNewer } from "../shared/version"
 import { dataDir } from "./data-dir"
 
 /**
- * Whether there is a newer Vey, and installing it.
+ * Whether there is a newer Vey, and installing it on Windows.
  *
- * **Not `electron-updater`, and deliberately.** Squirrel.Mac will not replace a
- * bundle that carries no Developer ID, and these builds carry none — signing
- * costs an Apple Developer membership, which is the same reason `install.sh`
- * exists at all. So the whole of the update story here is: ask GitHub what the
- * latest release is, compare it against this build, and run the very script the
- * README already tells people to paste into a terminal. There is no delta.
+ * The check is GitHub's `releases/latest` against this build's version, on
+ * every platform. What installs it differs:
  *
- * The one thing this process does fetch is the installer itself
- * (`downloadUpdate`) — when the button is pressed, or ahead of time, in the
- * background, when automatic updates are on, so that the next ordinary quit
- * can install it (`stageUpdate` in `ipc.ts`). The download *is* the wait, about
- * a hundred megabytes of it, and it is the one phase the window is still alive
- * for. `install.sh` quits the app before it copies anything, so a percentage is
- * honest up to there and nothing after it could be drawn at all.
+ * - **macOS** is `electron-updater`'s Squirrel.Mac (`electron-updates.ts`),
+ *   which needs `electron` and so is not here. It was refused while the builds
+ *   were unsigned — Squirrel will not replace a bundle with no Developer ID —
+ *   and `install.sh` stood in for it; `docs/design.md` § Updating has why it
+ *   came back. This module only says where a release's files are
+ *   (`releaseFeedUrl`).
+ * - **Windows** is the NSIS `.exe`, downloaded here (`downloadUpdate`) so the
+ *   wait has a percentage on it, and run silently once the app has quit
+ *   (`startWindowsInstaller`).
  *
- * Free of `electron` — this process's own version, and where the script it runs
- * lives, are arguments — so `test/updates.ts` can import it under plain `bun`,
- * the same bargain `git.ts` makes.
+ * Free of `electron` — this process's own version is an argument — so
+ * `test/updates.ts` can import it under plain `bun`, the same bargain `git.ts`
+ * makes.
  */
 
 // The source's own repository, which `release.yml` publishes the installers
@@ -52,10 +50,24 @@ export const RELEASES_PAGE = `https://github.com/${REPO}/releases`
  */
 const REQUEST_TIMEOUT_MS = 10_000
 
-/** The installer's output, kept because the app it is updating quits halfway
- * through and has nowhere left to show a failure. */
+/** What the macOS update said while it ran, kept because the app it is
+ * updating quits halfway through and has nowhere left to show a failure. */
 export function updateLogPath(): string {
   return path.join(dataDir(), "update.log")
+}
+
+/**
+ * Where one release's files are, which is the feed electron-updater's generic
+ * provider reads `latest-mac.yml` from, and the zip that names.
+ *
+ * Pinned to the version the button was pressed for rather than the GitHub
+ * provider's latest release, which may have moved on since the check that drew
+ * the button. The tag is always `v`-prefixed: `release.yml` runs on `v*` tags
+ * and nothing else.
+ */
+export function releaseFeedUrl(version: string): string {
+  const bare = version.replace(/^v/, "")
+  return `https://github.com/${REPO}/releases/download/v${encodeURIComponent(bare)}`
 }
 
 type Release = ReleaseNote
@@ -191,13 +203,13 @@ const PROGRESS_INTERVAL_MS = 100
 
 type Asset = { url: string; name: string; size: number }
 
-/** What this platform's installer is called at the end — the `.dmg` on macOS,
- * the NSIS `.exe` on Windows — or null where there is none to run. */
+/** What this platform's installer is called at the end — the NSIS `.exe` on
+ * Windows — or null where this module runs none. macOS's is electron-updater's
+ * to find, in `latest-mac.yml`. */
 function installerSuffix(
   platform: NodeJS.Platform,
   arch: string
 ): string | null {
-  if (platform === "darwin") return `-${arch}.dmg`
   if (platform === "win32") return `-${arch}.exe`
   return null
 }
@@ -205,10 +217,10 @@ function installerSuffix(
 /**
  * The installer for one platform and architecture among a release's assets.
  *
- * Found by the suffix of the asset's *own* name, which is how `install.sh`
- * finds it too — never by building a filename out of a version and a template,
- * so a release whose files are named something else fails as "no arm64 build
- * here" rather than as a 404 on a URL this app invented.
+ * Found by the suffix of the asset's *own* name — never by building a filename
+ * out of a version and a template, so a release whose files are named
+ * something else fails as "no x64 build here" rather than as a 404 on a URL
+ * this app invented.
  */
 export function installerAsset(
   release: unknown,
@@ -237,8 +249,7 @@ export function installerAsset(
 }
 
 /** A release by tag, in both spellings — which one a release used is not
- * something anything here should have to know, the same reason `install.sh`
- * tries both. */
+ * something anything here should have to know. */
 async function releaseByTag(version: string): Promise<unknown> {
   const bare = version.replace(/^v/, "")
   for (const tag of [`v${bare}`, bare]) {
@@ -264,11 +275,10 @@ async function releaseByTag(version: string): Promise<unknown> {
 }
 
 /**
- * Downloads a release's installer, reporting how far it has got.
+ * Downloads a release's Windows installer, reporting how far it has got.
  *
- * Ahead of `install.sh` rather than inside it: the script's own `curl` writes a
- * progress bar to a log file nobody is reading, and this is the only phase of
- * an install that can be drawn in the window — everything after it happens with
+ * Here rather than left to the installer, because this is the only phase of an
+ * install that can be drawn in the window — everything after it happens with
  * the app already quit.
  *
  * Answers with the file's path, which is handed straight to the installer.
@@ -276,7 +286,7 @@ async function releaseByTag(version: string): Promise<unknown> {
 export async function downloadUpdate(input: {
   version: string
   platform: NodeJS.Platform
-  /** `process.arch` — matches the `-arm64.dmg` / `-x64.exe` suffix. */
+  /** `process.arch` — matches the `-x64.exe` suffix. */
   arch: string
   /** Called at most every `PROGRESS_INTERVAL_MS`, and once more at the end.
    * `total` is 0 when the release does not say how large the asset is. */
@@ -330,71 +340,6 @@ export async function downloadUpdate(input: {
   // the bar stops a per cent or two short of the install starting.
   input.onProgress(received, total)
   return file
-}
-
-/**
- * Runs `install.sh` for a version, and reopens the app afterwards when asked.
- *
- * Synchronous, because one of its callers is `will-quit`: the process exits as
- * soon as that handler returns, and an `await` in front of the spawn would be
- * an installer that never starts.
- *
- * **Detached, and that is the whole trick.** The script's third act is quitting
- * the app so that a bundle is not replaced out from under a running process —
- * it does that itself, `osascript` and a `pgrep` loop, because somebody running
- * it from a terminal needs it too. A child of the process being quit would die
- * with it midway through a `ditto`; a detached one outlives it and gets to the
- * `open` at the end.
- *
- * Output goes to a file for the same reason: by the time anything goes wrong,
- * the window that would have shown it is gone.
- */
-export function startInstaller(input: {
-  /** The `install.sh` shipped inside the app bundle. */
-  script: string
-  version: string
-  /** The bundle to reopen — where `install.sh` puts it, not where this process
-   * happens to be running from. Null for an install at quit: somebody who
-   * quit the app did not ask for it back. */
-  appPath: string | null
-  /** The `.dmg` `downloadUpdate` already fetched, so the script skips its own
-   * `curl`. The script deletes it on the way out. */
-  dmg?: string
-}): void {
-  const logPath = updateLogPath()
-  mkdirSync(path.dirname(logPath), { recursive: true })
-  // Truncated rather than appended: what matters is the run that just failed,
-  // and this file is read by a person looking for exactly that.
-  const log = openSync(logPath, "w")
-
-  const child = spawn(
-    "/bin/bash",
-    [
-      "-c",
-      // Arguments rather than an interpolated string: a version is a value from
-      // the network, and this one ends up on a command line.
-      input.appPath ? 'bash "$1" "$2" && open "$3"' : 'bash "$1" "$2"',
-      "veystudio-update",
-      input.script,
-      input.version,
-      ...(input.appPath ? [input.appPath] : []),
-    ],
-    {
-      detached: true,
-      stdio: ["ignore", log, log],
-      // The one thing passed by environment rather than argument: the script's
-      // positional arguments are its public interface — a version, from a
-      // terminal — and a pre-downloaded file is this app talking to itself.
-      env: input.dmg
-        ? { ...process.env, VEYSTUDIO_UPDATE_DMG: input.dmg }
-        : process.env,
-      // No cwd of this app's: it may be inside the bundle about to be replaced.
-      cwd: path.dirname(logPath),
-    }
-  )
-  // The child holds its own copy; this one would otherwise outlive the spawn.
-  closeSync(log)
-  child.unref()
 }
 
 /**

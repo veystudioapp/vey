@@ -180,10 +180,7 @@ export const nav = {
       "Installing from inside the app is macOS and Windows only. The release page has the build for this machine.",
     windows:
       "Vey will quit, run the {version} installer and reopen. Every running copy of the app is closed first, so the old version cannot stay behind. Terminal sessions and anything running in the dock end with it.",
-    macBefore: "Vey will quit, install {version} into",
-    macMiddle: "and reopen — the same",
-    macAfter:
-      "the README hands you, run from inside the app. Terminal sessions and anything running in the dock end with it.",
+    mac: "Vey will download {version}, check that it is signed by the same developer as this copy, then quit, replace itself and reopen. Terminal sessions and anything running in the dock end with it.",
     youAreOn: "You are on {current}.",
     whatsNewIn: "What’s new in {version}",
     quitting: "Vey is quitting to replace itself, and reopens when it is done.",

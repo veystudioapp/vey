@@ -150,15 +150,18 @@ imports may reach `electron`.
   answers with the paths it could not restore instead of deleting them: they go
   to the trash in `ipc.ts`, because this module stays free of `electron` so the
   tests can import it.
-- **`updater.ts`** — whether GitHub has a newer release, and running
-  `install.sh` (carried in the bundle as an `extraResources` entry) to install
-  it. **Not `electron-updater`**: Squirrel.Mac will not replace an unsigned
-  bundle and these builds are unsigned. The installer is spawned **detached**,
-  because the script's own second act is quitting this app. On Windows it is the
-  NSIS `.exe` instead, run silently by `host.quitAndRun` at `will-quit` — after
-  the app's own cleanup — and it closes any copy still running. Free of `electron` —
-  the version and the script's path are arguments — so `test/updates.ts` can
-  import `isNewer`. `docs/design.md` § Updating has the rest.
+- **`updater.ts`** — whether GitHub has a newer release, and the Windows
+  install: the NSIS `.exe`, run silently by `host.quitAndRun` at `will-quit` —
+  after the app's own cleanup — closing any copy still running. **macOS is
+  `electron-updater`'s Squirrel.Mac** (`electron-updates.ts`, `host.macUpdate`),
+  now that the builds are signed: the release's zip, its signature checked
+  against this app's, the feed pinned to the release by `releaseFeedUrl`, so
+  `release.yml` publishes the zips and `latest-mac.yml` and `package.json` keeps
+  a `publish` block it never uploads through. `install.sh` is **deleted**; builds
+  up to 0.0.4 still update through their own copy of it, so releases keep
+  their `-<arch>.dmg`. Free of `electron` — the version is an argument — so
+  `test/updates.ts` can import `isNewer`. `docs/design.md` § Updating has the
+  rest.
 - **`telemetry.ts`** — the anonymous usage counts, posted from main to the
   studio's own server (`POST /api/telemetry`, rows of its D1 `app_events`):
   `app_opened` and a quarter-hourly `heartbeat` of focused seconds, under a

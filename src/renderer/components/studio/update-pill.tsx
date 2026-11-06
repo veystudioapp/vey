@@ -70,19 +70,11 @@ export function UpdatePill() {
               {t("nav.update.confirmTitle", { version: update.version })}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {!update.installable ? (
-                t("nav.update.notInstallable")
-              ) : window.desktop.platform === "win32" ? (
-                t("nav.update.windows", { version: update.version })
-              ) : (
-                <>
-                  {t("nav.update.macBefore", { version: update.version })}{" "}
-                  <code className="font-mono">/Applications</code>{" "}
-                  {t("nav.update.macMiddle")}{" "}
-                  <code className="font-mono">install.sh</code>{" "}
-                  {t("nav.update.macAfter")}
-                </>
-              )}
+              {!update.installable
+                ? t("nav.update.notInstallable")
+                : window.desktop.platform === "win32"
+                  ? t("nav.update.windows", { version: update.version })
+                  : t("nav.update.mac", { version: update.version })}
             </AlertDialogDescription>
           </AlertDialogHeader>
 

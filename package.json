@@ -56,6 +56,7 @@
     "cmdk": "^1.1.1",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
+    "electron-updater": "^6.8.11",
     "esbuild": "^0.28.1",
     "eslint": "^9",
     "eslint-config-prettier": "^10.1.8",
@@ -90,7 +91,7 @@
   "trustedDependencies": [
     "electron"
   ],
-  "//build.extraResources": "install.sh is carried in the bundle so the in-app update button runs this build's own installer rather than a script fetched at the moment it is pressed. Outside the asar because bash has to execute a real file. This note lives out here because electron-builder validates the `build` object against a schema and rejects any key it does not know, `//`-prefixed or not.",
+  "//build.publish": "Never used to upload — release.yml runs electron-builder with --publish never and publishes with gh. It is here because a publish provider is what makes electron-builder write app-update.yml into the bundle, which electron-updater reads its cache directory from, and latest-mac.yml beside the zips, which is the feed the macOS update reads. The app points that feed at one release's directory itself (releaseFeedUrl). The mac `zip` target is for the same update: Squirrel.Mac installs from a zip, never a dmg. These notes live out here because electron-builder validates the `build` object against a schema and rejects any key it does not know, `//`-prefixed or not.",
   "build": {
     "appId": "vn.app.vsclaude",
     "productName": "Vey Studio",
@@ -103,7 +104,6 @@
       "dist-electron/daemon.cjs"
     ],
     "extraResources": [
-      "install.sh",
       {
         "from": "dist-plugins",
         "to": "plugins"
@@ -113,12 +113,24 @@
       "output": "release",
       "buildResources": "resources"
     },
+    "publish": {
+      "provider": "github",
+      "owner": "veystudioapp",
+      "repo": "vey"
+    },
     "mac": {
       "category": "public.app-category.developer-tools",
       "icon": "resources/icon.png",
       "target": [
         {
           "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
           "arch": [
             "arm64",
             "x64"

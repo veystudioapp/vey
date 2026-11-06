@@ -24,18 +24,10 @@ import {
   guestPage,
   setBrowserCookies,
 } from "./electron-browser"
+import { installMacUpdate } from "./electron-updates"
 import type { Host } from "./host"
 import { createIpc } from "./ipc"
 import { clampPercent, kilobytes } from "./system-usage"
-
-/** The installer, shipped in the bundle (`extraResources`) rather than fetched:
- * a button that runs a script downloaded at the moment it is pressed is a
- * different thing to agree to than one that runs the app's own. */
-function installerScript(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, "install.sh")
-    : path.join(app.getAppPath(), "install.sh")
-}
 
 /** The built-in plugins: an `extraResources` entry in a packaged app, and what
  * `scripts/build-plugins.mjs` left in `dist-plugins/` while developing. */
@@ -324,7 +316,8 @@ export function registerIpc(
     },
     version: app.getVersion(),
     packaged: app.isPackaged,
-    installerScript: installerScript(),
+    macUpdate:
+      process.platform === "darwin" && app.isPackaged ? installMacUpdate : null,
     bundledPluginsDir: bundledPluginsDir(),
     appShare: electronShare,
   }

@@ -106,8 +106,8 @@ import { TsServers } from "./tsserver"
 import {
   checkForUpdate,
   downloadUpdate,
+  releaseFeedUrl,
   releaseNotes,
-  startInstaller,
   startWindowsInstaller,
 } from "./updater"
 import { DirectoryWatchers, RootWatchers } from "./watch"
@@ -146,16 +146,6 @@ const LOGIN_METHODS: ClaudeLoginRequest["method"][] = [
   "console",
   "sso",
 ]
-
-/**
- * Where `install.sh` puts the app, and so the bundle the updater reopens.
- *
- * Deliberately not this process's own `app.getPath("exe")`: the script installs
- * into `/Applications` whatever directory the running copy was launched from,
- * so reopening where *this* one lives could open the build that was just
- * replaced — or, from a dev run, an Electron binary in `node_modules`.
- */
-const APP_DIR = "/Applications/Vey.app"
 
 /**
  * An image on disk as a data URL.
@@ -1863,46 +1853,47 @@ export function createIpc(host: Host): {
         "There is no in-app installer for this platform — open the release page instead."
       )
     }
-    const script = host.installerScript
-    if (platform === "darwin" && !script) {
+    if (platform === "darwin" && !host.macUpdate) {
       throw new Error(
         "This build updates from its checkout — pull and restart instead."
       )
     }
-    // A version reaching a command line, from the renderer, off the network:
-    // checked here rather than trusted, even though the only thing that ever
-    // sends one is the answer `checkForUpdate` just gave.
+    // A version reaching a URL and a file name, from the renderer, off the
+    // network: checked here rather than trusted, even though the only thing
+    // that ever sends one is the answer `checkForUpdate` just gave.
     if (!/^[0-9A-Za-z.+-]{1,64}$/.test(version)) {
       throw new Error(`Not a version: ${version}`)
     }
-    // Downloaded here rather than by the script, so the wait has a percentage
-    // on it: this is the long phase and the only one with a window left to draw
-    // in. A failure throws, and the renderer is still there to show it.
+    // This is the long phase and the only one with a window left to draw in.
+    // A failure throws, and the renderer is still there to show it.
+    const onProgress = (received: number, total: number) =>
+      send(IPC.updateProgress, {
+        stage: "downloading",
+        version,
+        received,
+        total,
+      })
+    const installing = () =>
+      send(IPC.updateProgress, { stage: "installing", version })
+    if (platform === "darwin") {
+      await host.macUpdate!({
+        version,
+        feedUrl: releaseFeedUrl(version),
+        onProgress,
+        onInstalling: installing,
+      })
+      return
+    }
     const installer = await downloadUpdate({
       version,
       platform,
       arch: process.arch,
-      onProgress: (received, total) =>
-        send(IPC.updateProgress, {
-          stage: "downloading",
-          version,
-          received,
-          total,
-        }),
+      onProgress,
     })
-    send(IPC.updateProgress, { stage: "installing", version })
-    if (platform === "win32") {
-      // The app quits itself and the installer starts after — see
-      // `windowsInstallerArgs` for why in that order.
-      host.quitAndRun(() => startWindowsInstaller(installer, true))
-      return
-    }
-    startInstaller({
-      script: script!,
-      version,
-      appPath: APP_DIR,
-      dmg: installer,
-    })
+    installing()
+    // The app quits itself and the installer starts after — see
+    // `windowsInstallerArgs` for why in that order.
+    host.quitAndRun(() => startWindowsInstaller(installer, true))
   })
 
   return {

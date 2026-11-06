@@ -133,8 +133,8 @@ export function pendingUpdate(
  *
  * Null covers three cases the bar draws the same way — indeterminate: nothing
  * installing, a release that did not say how large its asset is, and the
- * `installing` stage, which is `install.sh` mounting and copying with this app
- * being quit somewhere in the middle. Rounded, and clamped, because a
+ * `installing` stage, which is the installer checking and replacing the app
+ * with this one being quit somewhere in the middle. Rounded, and clamped, because a
  * `content-length` that disagrees with the bytes arriving should not put 101%
  * on screen.
  */

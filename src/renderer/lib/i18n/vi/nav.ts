@@ -178,10 +178,7 @@ export const nav: Messages["nav"] = {
       "Chỉ có thể cài đặt từ trong ứng dụng trên macOS và Windows. Trang phát hành có bản dựng cho máy này.",
     windows:
       "Vey sẽ thoát, chạy trình cài đặt {version} rồi mở lại. Mọi bản đang chạy của ứng dụng sẽ được đóng trước để phiên bản cũ không còn sót lại. Các phiên terminal và mọi thứ đang chạy trong dock cũng sẽ kết thúc.",
-    macBefore: "Vey sẽ thoát, cài {version} vào",
-    macMiddle: "rồi mở lại — chính là",
-    macAfter:
-      "mà README hướng dẫn, chạy từ trong ứng dụng. Các phiên terminal và mọi thứ đang chạy trong dock cũng sẽ kết thúc.",
+    mac: "Vey sẽ tải {version}, kiểm tra bản đó được ký bởi cùng nhà phát triển với bản này, rồi thoát, tự thay thế và mở lại. Các phiên terminal và mọi thứ đang chạy trong dock cũng sẽ kết thúc.",
     youAreOn: "Bạn đang dùng {current}.",
     whatsNewIn: "Có gì mới trong {version}",
     quitting: "Vey đang thoát để tự thay thế, và sẽ mở lại khi xong.",

@@ -12,9 +12,9 @@ import { cn } from "@/lib/utils"
  *
  * A known total is a width; anything else is `animate-sweep`, the launch
  * screen's own loop, rather than a bar sitting at zero or ramping to 100 on a
- * timer. The stage that cannot be measured is the real one: `install.sh` mounts
- * a disk image, quits this app and copies a bundle, and the honest end of the
- * bar is the window closing.
+ * timer. The stage that cannot be measured is the real one: the installer checks
+ * what arrived, quits this app and replaces it, and the honest end of the bar
+ * is the window closing.
  */
 export function UpdateProgressBar({
   progress,

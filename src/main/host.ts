@@ -3,6 +3,21 @@ import type { ImportedCookie } from "./browser-cookies"
 import type { BrowserPage } from "./browser-hub"
 
 /**
+ * Installs one release on macOS and quits into it. Resolves once Squirrel.Mac
+ * has the new bundle staged and checked and the quit has been asked for;
+ * rejects with whatever stopped it before then, while the window can still
+ * say so.
+ */
+export type MacUpdate = (input: {
+  version: string
+  /** The release's download directory — `releaseFeedUrl` in `updater.ts`. */
+  feedUrl: string
+  onProgress: (received: number, total: number) => void
+  /** The download is done and Squirrel is checking and staging it. */
+  onInstalling: () => void
+}) => Promise<void>
+
+/**
  * Everything `ipc.ts` needs from Electron itself — a native dialog, a window to
  * pin, a badge on the dock icon — and nothing that reads or writes the
  * workspace. `electron-ipc.ts` implements it.
@@ -130,9 +145,10 @@ export type Host = {
    * an update unasked: a dev run would otherwise replace the installed app with
    * the latest release every time it was closed. */
   packaged: boolean
-  /** `install.sh`, or null where this host cannot run it — see
-   * `installUpdate` in `ipc.ts`. */
-  installerScript: string | null
+  /** macOS's in-app update (`electron-updates.ts`), or null where there is
+   * none — a dev run, which has no signed bundle for Squirrel to replace, and
+   * every other platform. */
+  macUpdate: MacUpdate | null
   /** The built-in plugins this build carries, or null for none — see
    * `main/plugins.ts`. */
   bundledPluginsDir: string | null

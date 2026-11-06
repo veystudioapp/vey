@@ -3075,18 +3075,19 @@ export type DesktopApi = {
   checkForUpdate: () => Promise<UpdateCheck>
 
   /**
-   * Installs a release and reopens the app, by running the same `install.sh`
-   * the README hands people.
+   * Installs a release and reopens the app: Squirrel.Mac through
+   * electron-updater on macOS, the NSIS installer on Windows — which is what
+   * `installable` on `UpdateCheck` says.
    *
-   * Resolves with nothing only when the installer could not be *started*, and
-   * throws when it could not be started at all — success is not something this
-   * call can report, because the script's second act is quitting the app that
-   * made it. macOS only, which is what `installable` on `UpdateCheck` says.
+   * Resolves once the app has been asked to quit into the new version, and
+   * throws when it could not get that far — success is not something this call
+   * can report, because the install happens after the app that made it is
+   * gone.
    *
-   * The release's `.dmg` is fetched by main before the script runs, so this call
-   * spans the download too and reports it through `onUpdateProgress`. A throw is
-   * therefore also how a failed download arrives — the one part of an install
-   * whose failure there is still a window to show.
+   * The call spans the download and reports it through `onUpdateProgress`. A
+   * throw is therefore also how a failed download arrives, or on macOS a
+   * bundle Squirrel refused — the parts of an install whose failure there is
+   * still a window to show.
    */
   installUpdate: (version: string) => Promise<void>
 
@@ -3144,7 +3145,7 @@ export type UpdateCheck =
       /** The release's page, for the "What's new" link. */
       url: string
       /**
-       * Whether `installUpdate` can do anything here: `install.sh` on macOS,
+       * Whether `installUpdate` can do anything here: Squirrel.Mac on macOS,
        * the NSIS installer run silently on Windows. On Linux the only honest
        * button is the one that opens the release page.
        */
@@ -3166,8 +3167,8 @@ export type ReleaseNote = {
  *
  * Two stages rather than a percentage of the whole, because only one of them
  * can be measured: `downloading` is bytes against a known total, `installing`
- * is `install.sh` mounting, quitting this app and copying a bundle — a few
- * seconds with no progress to read and no process left to read it from. So the
+ * is the installer checking what arrived, quitting this app and replacing it —
+ * a few seconds with no progress to read and no process left to read it from. So the
  * bar is a percentage up to the handover and indeterminate after it, which is
  * the truth rather than a fake ramp to 100.
  */
