@@ -33,6 +33,7 @@ import { useT } from "@/lib/i18n"
 import { useStudio } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { FileIcon } from "../file-icon"
+import { IconButton } from "../icon-button"
 import { SideRow } from "../side-row"
 import { CommitBox } from "./commit-box"
 
@@ -190,7 +191,8 @@ export function ChangesList({ root }: { root: FileRoot }) {
                 setOpen((state) => ({ ...state, staged: !state.staged }))
               }
             >
-              <RowAction
+              <IconButton
+                className={HEADING_ACTION}
                 label={t("files.changes.unstageEverything")}
                 onClick={() => {
                   void useChanges.getState().unstage(
@@ -200,7 +202,7 @@ export function ChangesList({ root }: { root: FileRoot }) {
                 }}
               >
                 <Minus />
-              </RowAction>
+              </IconButton>
             </Heading>
             {open.staged && nodes("staged", staged)}
           </>
@@ -216,13 +218,15 @@ export function ChangesList({ root }: { root: FileRoot }) {
                 setOpen((state) => ({ ...state, unstaged: !state.unstaged }))
               }
             >
-              <RowAction
+              <IconButton
+                className={HEADING_ACTION}
                 label={t("files.changes.discardEverything")}
                 onClick={() => setDiscarding("all")}
               >
                 <Undo2 />
-              </RowAction>
-              <RowAction
+              </IconButton>
+              <IconButton
+                className={HEADING_ACTION}
                 label={t("files.changes.stageEverything")}
                 onClick={() => {
                   void useChanges.getState().stage(
@@ -232,7 +236,7 @@ export function ChangesList({ root }: { root: FileRoot }) {
                 }}
               >
                 <Plus />
-              </RowAction>
+              </IconButton>
             </Heading>
             {open.unstaged && nodes("unstaged", unstaged)}
           </>
@@ -853,6 +857,11 @@ function Counts({ change }: { change: GitChange }) {
  * for the same reason a row's are: a button inside a button is dropped by the
  * browser.
  */
+/* The ghost button's dark hover is `muted/50`, which over the card's own
+   lightness lands within a hair of it — a hover nobody can see. `accent` is the
+   next step up and reads in both themes. */
+const HEADING_ACTION = "dark:hover:bg-accent"
+
 function Heading({
   label,
   count,
@@ -867,7 +876,7 @@ function Heading({
   children: ReactNode
 }) {
   return (
-    <div className="group/row relative flex h-6 items-center px-3 pt-1">
+    <div className="group/row relative flex h-7 items-center px-3 pt-1">
       <button
         type="button"
         onClick={onToggle}

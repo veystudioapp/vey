@@ -2,7 +2,7 @@
 # is a script in package.json and only wrapped here so `make help` lists it.
 #
 #   make dmg          a .dmg for this machine's architecture
-#   make help         everything else
+#   make helps         everything else
 
 SHELL := /bin/bash
 
