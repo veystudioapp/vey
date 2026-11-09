@@ -3,6 +3,7 @@ import {
   ChevronRight,
   FolderGit2,
   GitBranch,
+  Inbox as InboxIcon,
   MoreHorizontal,
   Plus,
 } from "lucide-react"
@@ -24,6 +25,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
+import { unreadOf, useInbox } from "@/lib/inbox/store"
 import { useProjects } from "@/lib/projects"
 import { byCheckout, checkoutsOf, projectOf } from "@/lib/project-checkouts"
 import { useShells } from "@/lib/shell/store"
@@ -202,6 +204,7 @@ function ProjectHeader({
           {t("projects.section.chat")}
         </span>
       </Button>
+      <InboxButton projectId={project.id} />
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -223,6 +226,33 @@ function ProjectHeader({
         </DropdownMenuContent>
       </DropdownMenu>
     </Header>
+  )
+}
+
+/**
+ * The project's ClickUp inbox (`docs/design.md` § The ClickUp inbox): opens its
+ * tab, and carries the count nobody has opened yet. The project's and not the
+ * checkout's — a worktree follows the same list.
+ */
+function InboxButton({ projectId }: { projectId: string }) {
+  const t = useT()
+  const unread = useInbox((state) => unreadOf(state.byFolder[projectId]))
+  return (
+    <IconButton
+      label={
+        unread ? t("inbox.buttonUnread", { count: unread }) : t("inbox.button")
+      }
+      side="bottom"
+      onClick={() => useInbox.getState().open(projectId)}
+      className="relative size-6"
+    >
+      <InboxIcon />
+      {unread > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[0.5625rem] leading-none font-semibold text-primary-foreground tabular-nums">
+          {unread > 99 ? "99+" : unread}
+        </span>
+      )}
+    </IconButton>
   )
 }
 

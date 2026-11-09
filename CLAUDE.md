@@ -595,12 +595,20 @@ the team already keeps or the stale half of a pair. What stays on disk stays:
 nothing reads `workspace/board.json` or `workspace/board-columns.json` any more,
 and nothing deletes them either.
 
-**There is no ClickUp watcher** — the button, the panel, the poll, the sealed
-key and the agents a watched task could be assigned to are all deleted, along
-with the `readOnlyTurn` they were the only caller of. `docs/design.md` § Watching
-ClickUp tasks, removed has the argument. What stays on a user's disk stays:
-nothing reads `workspace/clickup-watches.json` or the `clickup.token` key any
-more, and nothing deletes them either.
+**A project has a ClickUp inbox** — the watcher it replaces stays deleted
+(watched tasks, agents on them; nothing reads `clickup-watches.json` or
+`clickup.token`). One list per project, polled on its own interval (its settings — kinds shown, minutes — in `shared/inbox.ts`) by
+`main/clickup-inbox.ts` (the API, read-only, in `main/clickup.ts`, `fetch`
+handed in as `Host.fetch`): a new task, a status, title or description
+changed, priority, due date, tags or assignees moved (an assignment to the
+key's own user its own kind), a comment written, mentioning that user or
+edited become items in `workspace/clickup-inbox.json`, with what the next poll diffs
+against (`seen`, `cursor`) kept in main. The key is one, sealed under
+`clickup.inboxToken`, never sent back. The `Inbox` button beside `+ Chat`
+carries the unread count and opens the project's `inbox` tab
+(`components/studio/inbox/inbox-pane.tsx`, `lib/inbox/store.ts`; one per
+project, its `rootOf` following the project's worktrees). No notification, no
+write to ClickUp. `docs/design.md` § The ClickUp inbox (`test/clickup-inbox.ts`).
 
 **There is no `From template`** — `Add project` is two choices, `Browse…` an
 existing folder or `New directory…`, an **empty** one made where the system's

@@ -19,6 +19,7 @@ import type {
   WorkspaceRecord,
 } from "../shared/api"
 import { inOrder } from "../shared/folder-order"
+import type { InboxRecord } from "./clickup-inbox"
 import { profileDir, withConfigDirs } from "./claude-profiles"
 import { dataDir } from "./data-dir"
 
@@ -117,6 +118,10 @@ export const PLUGINS_DIR = "plugins"
 /** Every plugin's `saveData`, built-in and user alike — `dataFileOf` in
  * `main/plugins.ts` says why it is not beside the plugin. */
 export const PLUGIN_DATA_DIR = "plugin-data"
+
+/** Each project's ClickUp inbox. Not `clickup-watches.json`, which the
+ * deleted watcher left and nothing reads. */
+export const CLICKUP_INBOX_FILE = "clickup-inbox.json"
 
 /**
  * A note file's name, checked before it becomes a filename.
@@ -430,6 +435,16 @@ export class Store {
     const filled = withConfigDirs(profiles, this.claudeProfilesDir)
     await this.writeList(CLAUDE_PROFILES_FILE, filled)
     return filled
+  }
+
+  /** Each project's ClickUp inbox — `main/clickup-inbox.ts`. */
+  readClickupInbox(): Promise<InboxRecord[]> {
+    return this.readList<InboxRecord>(CLICKUP_INBOX_FILE)
+  }
+
+  /** Not pretty-printed: `seen` holds a status per task in each list. */
+  writeClickupInbox(records: InboxRecord[]): Promise<void> {
+    return this.writeList(CLICKUP_INBOX_FILE, records, false)
   }
 
   /**

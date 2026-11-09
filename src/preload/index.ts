@@ -12,6 +12,7 @@ import {
   type TreeChange,
   type MenuCommand,
   type ChatEvent,
+  type ProjectInbox,
   type TerminalExit,
   type TerminalOutput,
   type UpdateProgress,
@@ -258,6 +259,21 @@ const api: DesktopApi = {
     ipcRenderer.invoke(IPC.writePluginData, id, data),
   installPlugin: (source) => ipcRenderer.invoke(IPC.installPlugin, source),
   removePlugin: (id) => ipcRenderer.invoke(IPC.removePlugin, id),
+
+  inboxes: () => ipcRenderer.invoke(IPC.inboxes),
+  inboxHasKey: () => ipcRenderer.invoke(IPC.inboxHasKey),
+  inboxSetKey: (token) => ipcRenderer.invoke(IPC.inboxSetKey, token),
+  inboxConnect: (folderId, list) =>
+    ipcRenderer.invoke(IPC.inboxConnect, folderId, list),
+  inboxDisconnect: (folderId) =>
+    ipcRenderer.invoke(IPC.inboxDisconnect, folderId),
+  inboxMarkRead: (folderId, itemIds) =>
+    ipcRenderer.invoke(IPC.inboxMarkRead, folderId, itemIds),
+  inboxRefresh: (folderId) => ipcRenderer.invoke(IPC.inboxRefresh, folderId),
+  inboxSetSettings: (folderId, settings) =>
+    ipcRenderer.invoke(IPC.inboxSetSettings, folderId, settings),
+  onInboxChanged: (listener) =>
+    subscribe<ProjectInbox[]>(IPC.inboxChanged, listener),
 }
 
 contextBridge.exposeInMainWorld("desktop", api)

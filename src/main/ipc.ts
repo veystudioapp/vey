@@ -45,6 +45,8 @@ import { cookiesIn, MAX_COOKIE_FILE_BYTES, keptAs } from "./browser-cookies"
 import { cookieSites, cookieSources, sourceCookies } from "./browser-import"
 import { BrowserHub, browserServer } from "./browser-hub"
 import { Chats } from "./chat"
+import { checkKey } from "./clickup"
+import { ClickupInbox } from "./clickup-inbox"
 import { findFavicon, MAX_FAVICON_BYTES } from "./favicon"
 import { serverUrl } from "./studio-server"
 import * as files from "./files"
@@ -117,6 +119,10 @@ import {
   removeWorktree,
   worktreeDir,
 } from "./worktrees"
+
+/** The settings key the sealed ClickUp key is kept under. Not the deleted
+ * watcher's `clickup.token`, which was sealed in another shape. */
+const CLICKUP_KEY = "clickup.inboxToken"
 
 /** What `imageDataUrl` recognises as a picture. */
 const IMAGE_MIME_TYPES: Record<string, string> = {
@@ -1828,6 +1834,56 @@ export function createIpc(host: Host): {
   handle(IPC.removePlugin, async (_event, id: string) => {
     await host.trash(await installedPluginDir(pluginRoots, id))
   })
+
+  /*
+   * Each project's ClickUp inbox — `main/clickup-inbox.ts`. The key is one
+   * for the workspace, sealed like a custom API's and never handed back.
+   */
+  const clickupToken = async (): Promise<string> => {
+    const sealed = await store.getSetting(CLICKUP_KEY)
+    return (sealed && host.unseal(sealed)) || ""
+  }
+  const inbox = new ClickupInbox({
+    token: clickupToken,
+    fetch: host.fetch,
+    read: () => store.readClickupInbox(),
+    write: (records) => store.writeClickupInbox(records),
+    folderIds: async () =>
+      (await store.getWorkspace()).folders.map((folder) => folder.id),
+    onChange: (inboxes) => send(IPC.inboxChanged, inboxes),
+  })
+  inbox.start()
+
+  handle(IPC.inboxes, () => inbox.list())
+  handle(IPC.inboxHasKey, async () => (await clickupToken()) !== "")
+  handle(IPC.inboxSetKey, async (_event, token: unknown) => {
+    const key = typeof token === "string" ? token.trim() : ""
+    if (!key) throw new Error("Paste a ClickUp personal key.")
+    const checked = await checkKey(host.fetch, key)
+    if ("error" in checked) throw new Error(checked.error)
+    await store.setSetting(CLICKUP_KEY, host.seal(key))
+    void inbox.poll()
+  })
+  handle(IPC.inboxConnect, (_event, folderId: string, list: string) =>
+    inbox.connect(String(folderId), String(list))
+  )
+  handle(IPC.inboxDisconnect, (_event, folderId: string) =>
+    inbox.disconnect(String(folderId))
+  )
+  handle(
+    IPC.inboxMarkRead,
+    (_event, folderId: string, itemIds: string[] | null) =>
+      inbox.markRead(
+        String(folderId),
+        Array.isArray(itemIds) ? itemIds.map(String) : null
+      )
+  )
+  handle(IPC.inboxRefresh, (_event, folderId: string) =>
+    inbox.poll(String(folderId))
+  )
+  handle(IPC.inboxSetSettings, (_event, folderId: string, settings: unknown) =>
+    inbox.setSettings(String(folderId), settings)
+  )
 
   handle(IPC.systemUsage, () => systemUsage(host.appShare))
 

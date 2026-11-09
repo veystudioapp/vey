@@ -1,6 +1,7 @@
 import {
   GitCompare,
   GitGraph,
+  Inbox,
   MessageSquare,
   ShieldQuestion,
 } from "lucide-react"
@@ -8,6 +9,7 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { useChanges } from "@/lib/files/changes"
 import { useGitGraph } from "@/lib/files/git-graph"
+import { unreadOf, useInbox } from "@/lib/inbox/store"
 import { isDeleted, isDirty, useFiles } from "@/lib/files/store"
 import { gitStateOf, GIT_TONES, useGitStatus } from "@/lib/files/git-status"
 import { nameOf } from "@/lib/files/paths"
@@ -43,6 +45,8 @@ export function useTabItems(): Map<string, TabStripItem> {
 
   const changesOpenIds = useChanges((state) => state.openIds)
   const graphOpenIds = useGitGraph((state) => state.openIds)
+  const inboxOpenIds = useInbox((state) => state.openIds)
+  const inboxes = useInbox((state) => state.byFolder)
   const changesByRoot = useChanges((state) => state.byRoot)
 
   const fileOpenIds = useFiles((state) => state.openIds)
@@ -139,6 +143,23 @@ export function useTabItems(): Map<string, TabStripItem> {
           : t("nav.tabs.graph"),
       icon: <GitGraph className="size-3 shrink-0" />,
       title: folder ?? t("nav.tabs.graph"),
+    })
+  }
+
+  // `Inbox`, one per project, named the way `Changes` is; the unread count is
+  // the note, as `Changes`'s count is.
+  for (const folderId of inboxOpenIds) {
+    const folder = workspaceFolders.find((entry) => entry.id === folderId)?.name
+    const unread = unreadOf(inboxes[folderId])
+    add({
+      id: PREFIX.inbox + folderId,
+      label:
+        allProjectTabs && folder
+          ? t("inbox.tabIn", { folder })
+          : t("inbox.tab"),
+      icon: <Inbox className="size-3 shrink-0" />,
+      note: unread ? String(unread) : undefined,
+      title: folder ?? t("inbox.tab"),
     })
   }
 

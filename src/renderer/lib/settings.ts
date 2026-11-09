@@ -109,6 +109,9 @@ type Stored = {
    * edge — in pixels, or null for its own share of the tab.
    */
   graphDetailsHeight: number | null
+  /** The `Inbox` tab's list, dragged wider or narrower by its edge — in
+   * pixels, or null for its default. */
+  inboxListWidth: number | null
   /**
    * The `Git Graph` tab's column widths, dragged by their borders — null for
    * the defaults. Kept loose here and narrowed where it is read
@@ -189,6 +192,9 @@ function isStored(value: unknown): value is Stored {
     (record.graphDetailsHeight === undefined ||
       record.graphDetailsHeight === null ||
       typeof record.graphDetailsHeight === "number") &&
+    (record.inboxListWidth === undefined ||
+      record.inboxListWidth === null ||
+      typeof record.inboxListWidth === "number") &&
     (record.accountsCollapsed === undefined ||
       typeof record.accountsCollapsed === "boolean") &&
     (record.defaultAccountLabel === undefined ||
@@ -231,6 +237,7 @@ type SettingsState = Stored & {
   setComposerHeight: (height: number | null) => void
   setAccountsHeight: (height: number | null) => void
   setGraphDetailsHeight: (height: number | null) => void
+  setInboxListWidth: (width: number | null) => void
   setGraphColumns: (columns: GraphColumns | null) => void
   setAccountsCollapsed: (collapsed: boolean) => void
   /** Null gives the default login its address back. */
@@ -285,6 +292,7 @@ export const useSettings = create<SettingsState>((set, get) => {
       composerHeight,
       accountsHeight,
       graphDetailsHeight,
+      inboxListWidth,
       graphColumns,
       accountsCollapsed,
       defaultAccountLabel,
@@ -311,6 +319,7 @@ export const useSettings = create<SettingsState>((set, get) => {
       composerHeight,
       accountsHeight,
       graphDetailsHeight,
+      inboxListWidth,
       graphColumns,
       accountsCollapsed,
       defaultAccountLabel,
@@ -342,6 +351,7 @@ export const useSettings = create<SettingsState>((set, get) => {
     composerHeight: null,
     accountsHeight: null,
     graphDetailsHeight: null,
+    inboxListWidth: null,
     graphColumns: null,
     accountsCollapsed: false,
     defaultAccountLabel: null,
@@ -451,6 +461,11 @@ export const useSettings = create<SettingsState>((set, get) => {
 
     setGraphDetailsHeight(graphDetailsHeight) {
       set({ graphDetailsHeight })
+      save()
+    },
+
+    setInboxListWidth(inboxListWidth) {
+      set({ inboxListWidth })
       save()
     },
 

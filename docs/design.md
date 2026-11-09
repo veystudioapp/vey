@@ -1964,6 +1964,125 @@ repository, so it was a duplicate of the team's tracker or its stale half.
 A poll of watched tasks with agents assignable to them. A second account of
 somebody else's tracker, with a key on the machine and a poll always running.
 
+### The ClickUp inbox
+
+Asked for by the person using the app, which answers "a second account of
+somebody else's tracker" the way it answered "not used" for worktrees: the
+tracker is where the team works, and what was missing was being told when it
+moved without keeping ClickUp open. So it came back narrower than the watcher.
+Not pasted tasks and not agents — **one list per project**, and what reaches
+the inbox is what the poll already has in hand: a task new to the list; its
+status, title, description, priority, due date, tags or assignees changed —
+with an assignment **to you** its own kind; a comment written, written
+mentioning you, or edited. Only what costs no request beyond the list's page
+and the comments: a checklist, an attachment, a custom field or a threaded
+reply is a request per task, and a due date drawing near is not a change.
+Read-only, both ways: nothing is written to ClickUp.
+
+"You" is the key's own user, asked once per key (`GET /user`, `whoAmI`). It
+makes an assignment that adds you `assigned-me`, a comment whose rich text
+tags you (`mentionsIn`, a block of `type: "tag"`) `mention`, a task assigned
+to you `mine` and a comment you wrote or a task you made `byMe`.
+
+**Who did it is named only where ClickUp says.** A comment has its author and
+a task its `creator`, so a new task and a comment carry `by`. Who moved a
+status, retitled a task, or changed its assignees is not in the v2 API at
+all — a task has no history there; only a webhook's `history_items` name the
+user. A webhook needs a public HTTPS address to post to, which a desktop app
+does not have, so it would mean a relay through the studio's server and an
+admin's say in the ClickUp workspace. Until that is asked for, those items
+name nobody, and `Hide what I did myself` covers comments and new tasks
+alone, as its hint says. Unknown, the poll goes on
+without those. A task made already assigned to you is said twice — new, and
+assigned to you — or an inbox listing only the latter would never hear of it.
+
+**An item opened shows the change, not the task.** The first version read the
+task fresh and drew it — status, assignees, priority, due, description,
+comments — which was ClickUp's page again, with what had actually changed left
+to be found in it. So an item carries its own before and after: the two
+statuses with their colours, the two titles, the description or the comment
+before and after as a diff in the `Changes` tab's own chrome
+(`inbox/text-diff.tsx`, lazy), a new comment whole, a new task's description.
+The task is `Open in ClickUp`, and nothing is read on opening.
+
+A list link is often a **view's** (`/v/l/2kzkzpr0-438`, what a list's tabs
+show), an opaque id with no list in it, so connecting asks `GET /view/{id}` for
+its parent and refuses a view of a folder or a space (`listRefIn`,
+`resolveList`).
+
+Main polls (`main/clickup-inbox.ts`), because an inbox is for while nobody is
+looking. On each inbox's interval, one list after another: the list's tasks with
+`date_updated_gt` the inbox's `cursor`, then the comments of up to forty of
+them. A task missing from `seen` is new, and only that; a status, name,
+description, priority, due date, or set of tags or assignees (order is not a
+change) unlike `seen`'s changed; a comment dated after the old cursor is
+new. For there to be a before, the description and each comment read are kept
+in `seen` **whole**, cut at `BODY_MAX` (20,000 characters) — a hash was tried
+first and could only say that a text changed. Whitespace alone is not a change
+(`sameText`): ClickUp's editor reflows. A comment has a creation date and no
+edit date, so an edit is a comment already read whose text moved: one never
+read before an edit (the comments are read only for tasks that changed) is
+remembered and not announced. A `seen` entry written as a bare
+status, before titles and descriptions were followed, compares only the status
+until the task next changes. An item's id is what it is about, so one found
+twice is listed once (`foldPoll`, `test/clickup-inbox.ts`).
+Connecting reads the whole list once into `seen` and announces nothing. The
+cursor is ClickUp's own clock (the newest `date_updated`), so this machine's
+does not matter.
+
+**Comments are not read off the task's date alone.** They were, once: a task's
+comments were read only on the poll that found its `date_updated` moved, and a
+comment edited a second time was never announced — either the edit did not
+move the date, or the read on that poll came back with the text from before
+it, and the cursor was past that update for good. So a task active in the last
+day (`active`, its update or its newest comment, `ACTIVE_MS`) has its comments
+re-read on every poll whatever its date says, the changed tasks first, forty at
+most (`commentTargets`). An edit found that way is dated by the poll, and its
+id is the comment and both texts, so the same edit read twice is one item and
+a second edit is another. A comment written or edited on a task quiet for more
+than a day, without the task's date moving, is still missed until it next
+changes.
+
+`workspace/clickup-inbox.json` holds every project's inbox and is the only
+file. The key is one for the workspace — a personal token, checked against
+`GET /user`, sealed by `Host.seal` under `clickup.inboxToken` (the watcher's
+`clickup.token` was sealed in another shape and is left where it is). Requests
+go through `Host.fetch`, so a proxy reaches ClickUp the way the browser does.
+
+The `Inbox` button sits beside `+ Chat`, with the unread count as its badge;
+there is no OS notification and the dock badge does not count it — both were
+offered and not wanted. It opens the project's `inbox` tab, one per project, the
+project's and not a checkout's, so `rootOf` keeps it in the strip on the
+project's worktrees too. Items are marked read by being opened, or all at once.
+
+**The tab reads two ways, and narrows.** `Updates` lists every change, newest
+first; `Tasks` groups them by task (`tasksOf`), each task a row with its count
+and newest change, and opening one draws its history as a timeline of the
+same before-and-after bodies — the history this inbox saw, not ClickUp's,
+which the API does not give. Opening a task reads all of it. Over both, a
+filter bar (`lib/inbox/filter.ts`, `test/inbox-filter.ts`): a search over the
+task, who and what was said; since today, a week, a month, or between two days picked on Chromium's own date input (no date picker of the app's own, and none worth a dependency) — local days, both inclusive (`dayStart`); an assignee — you,
+a person, nobody — read off `assignees` on each item, which an item from
+before that field does not carry and so does not match; a group of kinds; and
+unread only. Grouping is done after filtering. Both are a look, held per
+project for the run, not settings.
+
+**Each inbox has settings** (`InboxSettings`, the gear in its header,
+`inbox/inbox-settings-dialog.tsx`): which of the twelve kinds it shows, in
+three groups (`INBOX_KIND_GROUPS`); two filters — only tasks assigned to you,
+and hiding your own comments; and how often its list is checked — 1 to 60
+minutes, two by default. `shows` in `shared/inbox.ts` is the one rule: an
+`assigned-me` or a `mention` switched off falls back to the broader kind it is
+a case of, and `Only mine` still lets through what names you. Per project,
+since each follows a different list with a different pace. Narrowed in main
+(`inboxSettingsOf` in `shared/inbox.ts`), stored on the record and kept across a
+change of list. A kind switched off is **hidden, not dropped**: the poll still
+records it and `viewOf` filters it out, so switching it back on brings its
+items back, and `Mark all read` leaves a hidden kind's unread alone. The one
+saving is comments: with no comment kind on, none are read. The timer
+ticks every minute and polls an inbox once its interval has passed since it
+was last tried — tried, not answered, so a refused key waits like the rest.
+
 ### Worktrees, removed
 
 A layer between project and chat (`worktreeId` everywhere). The isolation was

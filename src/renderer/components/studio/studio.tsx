@@ -36,6 +36,7 @@ import { useProjects } from "@/lib/projects"
 import { useWorkspaceSearch } from "@/lib/workspace-search"
 import { useClaudeProfiles } from "@/lib/chat/claude-profiles"
 import { useBrowser } from "@/lib/browser/store"
+import { useInbox } from "@/lib/inbox/store"
 import { useChats } from "@/lib/chat/store"
 import { badgeCount } from "@/lib/chat/unread"
 import { Dock } from "./dock"
@@ -47,6 +48,7 @@ import { FileTree } from "./files/file-tree"
 import { IconButton } from "./icon-button"
 import { ChangesPane } from "./files/changes-pane"
 import { GitGraphPane } from "./files/git-graph-pane"
+import { InboxPane } from "./inbox/inbox-pane"
 import { FileWorkspace } from "./files/file-workspace"
 import { AddFolderDialog } from "./add-folder-dialog"
 import { UnsavedDialog } from "./files/unsaved-dialog"
@@ -78,6 +80,8 @@ function paneView(pane: Pane) {
       return <ChangesPane />
     case "graph":
       return <GitGraphPane />
+    case "inbox":
+      return <InboxPane />
     case "chat":
       return <ChatPane />
   }
@@ -127,6 +131,12 @@ export function Studio() {
   // A chat's browser opened by its own `claude` — the studio's window only,
   // since a popped-out chat has no browser panel.
   useEffect(() => useBrowser.getState().listen(), [])
+  // Each project's ClickUp inbox, polled in main — subscribed for the button's
+  // badge, whether or not a tab is open.
+  useEffect(() => {
+    void useInbox.getState().load()
+    return useInbox.getState().listen()
+  }, [])
 
   // The dock icon's red number. Here rather than in main because `unread` is
   // this window's — main knows a chat went quiet but not whether anybody has

@@ -3124,6 +3124,29 @@ export type DesktopApi = {
   installPlugin: (source: PluginSource) => Promise<PluginInstall | null>
   /** Moves an installed plugin to the trash. A built-in one is refused. */
   removePlugin: (id: string) => Promise<void>
+
+  /** Every project's ClickUp inbox — `main/clickup-inbox.ts`. */
+  inboxes: () => Promise<ProjectInbox[]>
+  /** Whether a ClickUp key is saved and still opens. The key itself never
+   * comes back to the renderer. */
+  inboxHasKey: () => Promise<boolean>
+  /** Checks a personal key against ClickUp and seals it; throws with
+   * ClickUp's reason when refused. */
+  inboxSetKey: (token: string) => Promise<void>
+  /** Points a project's inbox at a list, by URL or id. Reads the whole list
+   * once so nothing already there is announced; throws with the reason. */
+  inboxConnect: (folderId: string, list: string) => Promise<ProjectInbox>
+  inboxDisconnect: (folderId: string) => Promise<void>
+  /** Marks items read; null is every item in that inbox. */
+  inboxMarkRead: (folderId: string, itemIds: string[] | null) => Promise<void>
+  /** Polls that inbox now rather than at the next tick. */
+  inboxRefresh: (folderId: string) => Promise<void>
+  /** Replaces that inbox's settings; anything out of range is dropped to the
+   * default in main. */
+  inboxSetSettings: (folderId: string, settings: InboxSettings) => Promise<void>
+  /** Every inbox, after anything about one of them changed. Returns an
+   * unsubscribe. */
+  onInboxChanged: (listener: (inboxes: ProjectInbox[]) => void) => () => void
 }
 
 /**
@@ -3196,6 +3219,96 @@ export type MenuCommand =
   | "toggle-sidebar"
   | "toggle-terminal"
   | "open-settings"
+
+/**
+ * One thing that happened to a task in a project's ClickUp list, as the
+ * project's inbox lists it — `docs/design.md` § The ClickUp inbox.
+ */
+export type InboxKind =
+  | "created"
+  | "status"
+  | "renamed"
+  | "description"
+  | "priority"
+  | "due"
+  | "tags"
+  | "assigned"
+  | "assigned-me"
+  | "comment"
+  | "mention"
+  | "comment-edited"
+
+export type InboxItem = {
+  /** Stable across polls, so a change seen twice is listed once. */
+  id: string
+  kind: InboxKind
+  taskId: string
+  taskName: string
+  /** Always an `https://app.clickup.com/` link — checked in main. */
+  url: string
+  /**
+   * What it was: the status for `status`, the name for `renamed`, the
+   * priority for `priority`, the due date's ms as text for `due`, and for
+   * `assigned` / `assigned-me` / `tags` the people's names or the tags,
+   * joined by `, `.
+   */
+  from: string | null
+  /** ClickUp's own hue for `from`, a checked `#hex`, or null. */
+  fromColor: string | null
+  /** What it became, in the same shapes as `from`; the task's status for
+   * `created`. */
+  to: string | null
+  /** ClickUp's own hue for `to`, a checked `#hex`, or null. */
+  color: string | null
+  /** Who wrote the comment, new or edited, or made the task. Nobody else is
+   * named: ClickUp's API does not say who changed a task. */
+  by: string | null
+  /** The comment as the row's one line — as it now reads, for an edit. */
+  text: string | null
+  /** The whole text before, for `description` and `comment-edited`. */
+  before: string | null
+  /** The whole text after: the description for `description` and `created`,
+   * the comment for `comment` and `comment-edited`. */
+  after: string | null
+  /** When it happened, by ClickUp's clock, in ms. */
+  at: number
+  read: boolean
+  /** The task was assigned to the key's own user when this was seen. */
+  mine?: boolean
+  /** Who the task was assigned to when this was seen, by name — what the
+   * inbox's assignee filter reads. Absent on items from before. */
+  assignees?: string[]
+  /** The key's own user did it — said for comments and new tasks, the two
+   * ClickUp names an author for. */
+  byMe?: boolean
+}
+
+/** A project's own choices about its inbox — `shared/inbox.ts` holds the
+ * defaults and the narrowing. */
+export type InboxSettings = {
+  /** The kinds listed. One left out is hidden, its items with it. */
+  kinds: InboxKind[]
+  /** How often the list is checked; one of `INBOX_INTERVALS`. */
+  intervalMinutes: number
+  /** Only tasks assigned to the key's user — and, whatever the task, what
+   * names them: an assignment to them, a mention of them. */
+  onlyMine: boolean
+  /** Hide what they did themselves: their comments, edits, new tasks. */
+  hideOwn: boolean
+}
+
+/** A project's inbox: the ClickUp list it follows and what has come of it. */
+export type ProjectInbox = {
+  folderId: string
+  list: { id: string; name: string }
+  settings: InboxSettings
+  /** Newest first, only the kinds `settings` lists. */
+  items: InboxItem[]
+  /** The last poll that answered, ISO; null before the first. */
+  polledAt: string | null
+  /** Why the last poll did not answer, or null. */
+  error: string | null
+}
 
 /** IPC channel names, shared so main and preload cannot drift apart. */
 export const IPC = {
@@ -3335,4 +3448,13 @@ export const IPC = {
   writePluginData: "plugins:write-data",
   installPlugin: "plugins:install",
   removePlugin: "plugins:remove",
+  inboxes: "inbox:list",
+  inboxHasKey: "inbox:has-key",
+  inboxSetKey: "inbox:set-key",
+  inboxConnect: "inbox:connect",
+  inboxDisconnect: "inbox:disconnect",
+  inboxMarkRead: "inbox:mark-read",
+  inboxRefresh: "inbox:refresh",
+  inboxSetSettings: "inbox:settings",
+  inboxChanged: "inbox:changed",
 } as const
