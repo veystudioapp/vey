@@ -35,8 +35,8 @@ import type { WorkspaceFolder } from "@shared/api"
  * offered as a ref of its own (a tag, a commit) rather than a branch the
  * repository listed.
  */
-type BranchOption = { value: string; typed?: boolean }
-type BranchGroup = { label: string; items: BranchOption[] }
+export type BranchOption = { value: string; typed?: boolean }
+export type BranchGroup = { label: string; items: BranchOption[] }
 
 /**
  * A branch and what to cut it from, for `git worktree add` — the checkout then
@@ -234,9 +234,10 @@ export function NewWorktreeDialog({
 /**
  * One ref out of `groups`, or the typed text when it names none of them —
  * offered last as `Use “…”`, and only while the query matches no entry
- * exactly, so picking a listed branch never offers it a second time.
+ * exactly, so picking a listed branch never offers it a second time. Also the
+ * Git Graph's `Compare with…`, which wants the same "a branch, or any ref".
  */
-function BranchCombobox({
+export function BranchCombobox({
   id,
   value,
   onChange,

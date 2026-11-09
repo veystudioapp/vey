@@ -64,10 +64,22 @@ const api: DesktopApi = {
   gitLog: (folderId, limit, skip, query, scope) =>
     ipcRenderer.invoke(IPC.gitLog, folderId, limit, skip, query, scope),
   gitUpstream: (folderId) => ipcRenderer.invoke(IPC.gitUpstream, folderId),
-  gitCommitFiles: (folderId, hash) =>
-    ipcRenderer.invoke(IPC.gitCommitFiles, folderId, hash),
-  gitCommitFileDiff: (folderId, hash, path, from) =>
-    ipcRenderer.invoke(IPC.gitCommitFileDiff, folderId, hash, path, from),
+  gitCommitFiles: (folderId, hash, base) =>
+    ipcRenderer.invoke(IPC.gitCommitFiles, folderId, hash, base),
+  gitCommitFileDiff: (folderId, hash, path, from, base) =>
+    ipcRenderer.invoke(IPC.gitCommitFileDiff, folderId, hash, path, from, base),
+  gitCompareBase: (folderId, hash, against) =>
+    ipcRenderer.invoke(IPC.gitCompareBase, folderId, hash, against),
+  gitCommitMessage: (folderId, hash) =>
+    ipcRenderer.invoke(IPC.gitCommitMessage, folderId, hash),
+  gitCheckoutDetached: (folderId, hash) =>
+    ipcRenderer.invoke(IPC.gitCheckoutDetached, folderId, hash),
+  gitCreateBranch: (folderId, name, hash, checkout) =>
+    ipcRenderer.invoke(IPC.gitCreateBranch, folderId, name, hash, checkout),
+  gitCreateTag: (folderId, name, hash, message) =>
+    ipcRenderer.invoke(IPC.gitCreateTag, folderId, name, hash, message),
+  gitCherryPick: (folderId, hash) =>
+    ipcRenderer.invoke(IPC.gitCherryPick, folderId, hash),
   gitStage: (folderId, paths) =>
     ipcRenderer.invoke(IPC.gitStage, folderId, paths),
   gitUnstage: (folderId, paths) =>

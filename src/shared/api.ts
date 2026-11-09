@@ -209,6 +209,23 @@ export type GitPushResult =
   | { ok: false; reason: "auth" | "failed"; command: string; message: string }
 
 /**
+ * What one of the Git Graph menu's writes answers with — see `attempt` in
+ * `main/git.ts`. `message` is git's own words either way. `conflict` is a
+ * cherry-pick stopped on conflicts, left in the working tree to resolve;
+ * `empty` one whose change the branch already had, aborted.
+ */
+export type GitWriteResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string; conflict?: boolean; empty?: boolean }
+
+/** What a picked commit is compared with — see `compareBase` in `main/git.ts`. */
+export type GitCompareAgainst =
+  { kind: "upstream" } | { kind: "mergeBase" } | { kind: "ref"; ref: string }
+
+/** A comparison's left side, resolved: its hash, and how to name it. */
+export type GitCompareBase = { hash: string; label: string }
+
+/**
  * One file a commit changed — see `commitFiles` in `main/git.ts`. Paths are the
  * repository's own, `/`-separated, since the file may no longer be on disk.
  */
@@ -2316,15 +2333,53 @@ export type DesktopApi = {
   /** The checked-out branch against its remote — see `GitUpstream`. Null for
    * a folder with no commit to compare. */
   gitUpstream: (folderId: string) => Promise<GitUpstream | null>
-  /** The files one commit changed, against its first parent. */
-  gitCommitFiles: (folderId: string, hash: string) => Promise<GitCommitFile[]>
+  /** The files one commit changed, against its first parent — or against
+   * `base`, a hash `gitCompareBase` answered, for a comparison. */
+  gitCommitFiles: (
+    folderId: string,
+    hash: string,
+    base?: string
+  ) => Promise<GitCommitFile[]>
   /** One of those files, both sides — what the diff tab draws for it. */
   gitCommitFileDiff: (
     folderId: string,
     hash: string,
     path: string,
-    from?: string
+    from?: string,
+    base?: string
   ) => Promise<GitCommitFileDiff>
+  /** What a commit is compared with, as a hash — null where there is nothing
+   * to compare (no upstream, a merge base that is the commit itself, a name
+   * git cannot read). */
+  gitCompareBase: (
+    folderId: string,
+    hash: string,
+    against: GitCompareAgainst
+  ) => Promise<GitCompareBase | null>
+  /** A commit's whole message, body included. */
+  gitCommitMessage: (folderId: string, hash: string) => Promise<string | null>
+  /**
+   * The Git Graph menu's writes, each against one commit — `docs/design.md`
+   * § The Git Graph tab's menu. Answer rather than reject: a refusal is git's
+   * own sentence for the tab to show.
+   */
+  gitCheckoutDetached: (
+    folderId: string,
+    hash: string
+  ) => Promise<GitWriteResult>
+  gitCreateBranch: (
+    folderId: string,
+    name: string,
+    hash: string,
+    checkout: boolean
+  ) => Promise<GitWriteResult>
+  gitCreateTag: (
+    folderId: string,
+    name: string,
+    hash: string,
+    message: string
+  ) => Promise<GitWriteResult>
+  gitCherryPick: (folderId: string, hash: string) => Promise<GitWriteResult>
 
   /**
    * The three writes the Changes list makes — `git add`, its undo, and
@@ -2337,7 +2392,7 @@ export type DesktopApi = {
    *
    * `gitCommit` is the fourth now, and the reversal is recorded on `commit` in
    * `main/git.ts` and in `docs/design.md` § Committing. What is still refused is
-   * everything past it: no amend, no branch. `gitPush` pushes, without
+   * everything past it: no amend. `gitPush` pushes, without
    * prompting — see `push` there.
    */
   gitStage: (folderId: string, paths: string[]) => Promise<void>
@@ -3346,6 +3401,12 @@ export const IPC = {
   gitUpstream: "git:upstream",
   gitCommitFiles: "git:commit-files",
   gitCommitFileDiff: "git:commit-file-diff",
+  gitCompareBase: "git:compare-base",
+  gitCommitMessage: "git:commit-message",
+  gitCheckoutDetached: "git:checkout-detached",
+  gitCreateBranch: "git:create-branch",
+  gitCreateTag: "git:create-tag",
+  gitCherryPick: "git:cherry-pick",
   gitStage: "git:stage",
   gitUnstage: "git:unstage",
   gitDiscard: "git:discard",

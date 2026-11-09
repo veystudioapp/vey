@@ -19,6 +19,7 @@ import {
   type WorkspaceSearch,
   type ChatAnswer,
   type ChatOptions,
+  type GitCompareAgainst,
 } from "../shared/api"
 import type { PluginFile, PluginSource } from "../shared/plugins"
 import { pathFilterOf } from "../shared/search"
@@ -73,6 +74,12 @@ import {
   commitFileDiff,
   commitFiles,
   currentBranch,
+  checkoutDetached,
+  cherryPick,
+  commitMessage,
+  compareBase,
+  createBranch,
+  createTag,
   discard,
   discardAll,
   blame,
@@ -1186,8 +1193,14 @@ export function createIpc(host: Host): {
   // Reads of the object store in the folder's own repository, so no path gate:
   // what is named is a commit and a path *in* it, never a file on disk, and
   // `git.ts` refuses a hash or a path that is anything else.
-  handle(IPC.gitCommitFiles, async (_event, folderId: string, hash: string) =>
-    commitFiles(await store.resolveFolderDir(folderId), String(hash))
+  handle(
+    IPC.gitCommitFiles,
+    async (_event, folderId: string, hash: string, base?: string) =>
+      commitFiles(
+        await store.resolveFolderDir(folderId),
+        String(hash),
+        typeof base === "string" ? base : undefined
+      )
   )
 
   handle(
@@ -1197,14 +1210,77 @@ export function createIpc(host: Host): {
       folderId: string,
       hash: string,
       file: string,
-      from?: string
+      from?: string,
+      base?: string
     ) =>
       commitFileDiff(
         await store.resolveFolderDir(folderId),
         String(hash),
         String(file),
-        typeof from === "string" ? from : undefined
+        typeof from === "string" ? from : undefined,
+        typeof base === "string" ? base : undefined
       )
+  )
+
+  handle(
+    IPC.gitCompareBase,
+    async (_event, folderId: string, hash: string, against: unknown) =>
+      compareBase(
+        await store.resolveFolderDir(folderId),
+        String(hash),
+        against as GitCompareAgainst
+      )
+  )
+
+  handle(IPC.gitCommitMessage, async (_event, folderId: string, hash: string) =>
+    commitMessage(await store.resolveFolderDir(folderId), String(hash))
+  )
+
+  // The Git Graph menu's writes. The folder is the workspace's own and the
+  // commit a hash `git.ts` checks, so there is no path to gate; each answers
+  // with git's words rather than throwing.
+  handle(
+    IPC.gitCheckoutDetached,
+    async (_event, folderId: string, hash: string) =>
+      checkoutDetached(await store.resolveFolderDir(folderId), String(hash))
+  )
+
+  handle(
+    IPC.gitCreateBranch,
+    async (
+      _event,
+      folderId: string,
+      name: string,
+      hash: string,
+      checkout: boolean
+    ) =>
+      createBranch(
+        await store.resolveFolderDir(folderId),
+        String(name),
+        String(hash),
+        checkout === true
+      )
+  )
+
+  handle(
+    IPC.gitCreateTag,
+    async (
+      _event,
+      folderId: string,
+      name: string,
+      hash: string,
+      message: string
+    ) =>
+      createTag(
+        await store.resolveFolderDir(folderId),
+        String(name),
+        String(hash),
+        typeof message === "string" ? message : ""
+      )
+  )
+
+  handle(IPC.gitCherryPick, async (_event, folderId: string, hash: string) =>
+    cherryPick(await store.resolveFolderDir(folderId), String(hash))
   )
 
   /*

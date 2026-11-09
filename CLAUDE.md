@@ -141,7 +141,11 @@ imports may reach `electron`.
   with the editor's buffer on stdin, for the current-line annotation
   (`lib/editor-git-blame.ts`, § Who last changed a line), and
   `lineHistory` (`git log -L`) the card's list of every commit that changed
-  that line. Amend and branch
+  that line. **The `Git Graph` tab's row menu writes** —
+  `checkoutDetached`, `createBranch`, `createTag`, `cherryPick`, each answering
+  with git's words, and `compareBase` for its three comparisons
+  (`files/graph-commit-menu.tsx`, `test/git-graph-menu.ts`; `docs/design.md`
+  § The Git Graph tab's menu). Amend, merge, rebase, reset and deleting a ref
   stay out — that is
   the git client the dock's shell already is. **`push`** is the `Commits`
   view's button, run in the background and **never prompting** (no tty,

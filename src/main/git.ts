@@ -12,11 +12,14 @@ import type {
   GitRef,
   GitCommitFile,
   GitCommitFileDiff,
+  GitCompareAgainst,
+  GitCompareBase,
   GitFileState,
   GitLineCommit,
   GitPushResult,
   GitStatusEntry,
   GitUpstream,
+  GitWriteResult,
 } from "../shared/api"
 
 const run = promisify(execFile)
@@ -1403,25 +1406,31 @@ async function firstParent(dir: string, hash: string): Promise<string | null> {
  *
  * `-M` so a rename is one row that says where it came from, and the counts are
  * read with the same flag so a rename's row carries its own numbers.
+ *
+ * `base` puts another commit on the left in place of the first parent — the
+ * Git Graph's `Compare with…` items, whose base `compareBase` resolved to a
+ * hash first, so nothing but a hash reaches git here either.
  */
 export async function commitFiles(
   dir: string,
-  hash: string
+  hash: string,
+  base?: string
 ): Promise<GitCommitFile[]> {
   if (!HASH.test(hash)) return []
+  if (base !== undefined && !HASH.test(base)) return []
 
   let parent: string | null
   try {
-    parent = await firstParent(dir, hash)
+    parent = base ?? (await firstParent(dir, hash))
   } catch {
     return []
   }
   const range = parent ? [parent, hash] : ["--root", hash]
-  const base = ["diff-tree", "-r", "-M", "--no-commit-id", "-z"]
+  const diffTree = ["diff-tree", "-r", "-M", "--no-commit-id", "-z"]
 
   const [status, numbers] = await Promise.all([
-    git(dir, [...base, "--name-status", ...range]),
-    git(dir, [...base, "--numstat", ...range]),
+    git(dir, [...diffTree, "--name-status", ...range]),
+    git(dir, [...diffTree, "--numstat", ...range]),
   ])
 
   return parseCommitFiles(status, numbers)
@@ -1515,15 +1524,17 @@ export async function commitFileDiff(
   dir: string,
   hash: string,
   file: string,
-  from?: string
+  from?: string,
+  base?: string
 ): Promise<GitCommitFileDiff> {
   const none = { before: null, after: null, patch: null, binary: false }
   if (!HASH.test(hash) || !isRepoPath(file)) return none
   if (from !== undefined && !isRepoPath(from)) return none
+  if (base !== undefined && !HASH.test(base)) return none
 
   let parent: string | null
   try {
-    parent = await firstParent(dir, hash)
+    parent = base ?? (await firstParent(dir, hash))
   } catch {
     return none
   }
@@ -1603,8 +1614,9 @@ function isRepoPath(file: string): boolean {
  * panel with no room for one" — it is reading a diff, then ending that reading.
  * `docs/design.md` § Committing carries the whole argument.
  *
- * What is still refused is everything after it: no amend, no branch. (`push`
- * came later, for the `Commits` view's button, and never prompts.)
+ * What is still refused is everything after it: no amend. (`push`
+ * came later, for the `Commits` view's button, and never prompts; the Git
+ * Graph's branch, tag, checkout and cherry-pick later still — `attempt`.)
  * This app is not becoming a second and worse git client — it finishes the one
  * gesture it already had somebody in the middle of. (A read-only list of
  * commits came later, `log` above; it writes nothing.)
@@ -1722,6 +1734,233 @@ const PUSH_TIMEOUT_MS = 90_000
  */
 const AUTH_FAILURE =
   /Permission denied \(|Host key verification failed|terminal prompts disabled|could not read (Username|Password)|Authentication failed|passphrase|read_passphrase|askpass/i
+
+/**
+ * The Git Graph's row menu: four local writes, each against one commit picked
+ * off the graph — `docs/design.md` § The Git Graph tab's menu has why the tab
+ * that "never wrote" now does. Still no merge, rebase, reset, amend or ref
+ * deletion: what is here makes something new or moves `HEAD`, and git itself
+ * refuses each where it would lose work (a checkout over local edits, a
+ * cherry-pick over them).
+ *
+ * Every one answers rather than rejects, with git's own words, since a refusal
+ * is a sentence the reader needs and not a crash. Nothing prompts: no
+ * terminal, and `GIT_EDITOR=:` — git's own "no editor" — so a cherry-pick
+ * configured to edit its message cannot open one nobody can see.
+ */
+async function attempt(dir: string, args: string[]): Promise<GitWriteResult> {
+  try {
+    const { stdout, stderr } = await run("git", args, {
+      cwd: dir,
+      windowsHide: true,
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_EDITOR: ":" },
+    })
+    return { ok: true, message: `${stdout}${stderr}`.trim() }
+  } catch (error) {
+    const failed = error as {
+      stdout?: string
+      stderr?: string
+      message?: string
+    }
+    const said = `${failed.stdout ?? ""}${failed.stderr ?? ""}`.trim()
+    return { ok: false, message: said || (failed.message ?? "git failed") }
+  }
+}
+
+/** A name a branch or tag may have, checked before git sees it: nothing that
+ * starts like an option, then git's own `check-ref-format`. */
+async function isRefName(
+  dir: string,
+  name: string,
+  kind: "branch" | "tag"
+): Promise<boolean> {
+  if (typeof name !== "string" || !name || name.startsWith("-")) return false
+  if (/[\s\0]/.test(name)) return false
+  const args =
+    kind === "branch"
+      ? ["check-ref-format", "--branch", name]
+      : ["check-ref-format", `refs/tags/${name}`]
+  return git(dir, args).then(
+    () => true,
+    () => false
+  )
+}
+
+/** `HEAD` moved onto a commit with no branch — `git checkout --detach`, which
+ * git refuses where local edits would be overwritten. */
+export async function checkoutDetached(
+  dir: string,
+  hash: string
+): Promise<GitWriteResult> {
+  if (!HASH.test(hash)) return { ok: false, message: "Not a commit." }
+  return attempt(dir, ["checkout", "--detach", hash])
+}
+
+/** A branch at a commit, checked out when `checkout` says so. */
+export async function createBranch(
+  dir: string,
+  name: string,
+  hash: string,
+  checkout: boolean
+): Promise<GitWriteResult> {
+  if (!HASH.test(hash)) return { ok: false, message: "Not a commit." }
+  if (!(await isRefName(dir, name, "branch")))
+    return { ok: false, message: `“${name}” is not a valid branch name.` }
+  return attempt(
+    dir,
+    checkout ? ["checkout", "-b", name, hash] : ["branch", name, hash]
+  )
+}
+
+/** A tag at a commit — annotated when there is a message, lightweight when
+ * there is none, as `git tag` itself decides. */
+export async function createTag(
+  dir: string,
+  name: string,
+  hash: string,
+  message: string
+): Promise<GitWriteResult> {
+  if (!HASH.test(hash)) return { ok: false, message: "Not a commit." }
+  if (!(await isRefName(dir, name, "tag")))
+    return { ok: false, message: `“${name}” is not a valid tag name.` }
+  const body = typeof message === "string" ? message.trim() : ""
+  return attempt(
+    dir,
+    body ? ["tag", "-a", name, "-m", body, hash] : ["tag", name, hash]
+  )
+}
+
+/**
+ * One commit applied onto `HEAD`. A merge is picked against its first parent
+ * (`-m 1`), the side the graph draws it coming onto — the same reading
+ * `commitFiles` gives it.
+ *
+ * Two endings that are not a plain success or failure. A **conflict** stops
+ * with the cherry-pick in progress and the markers in the files, which is
+ * exactly what the `Changes` list and the editor's Accept buttons are for, so
+ * it is left there and answered as `conflict`. A pick that came out **empty**
+ * — the change is already on this branch — also stops in progress, waiting for
+ * a `--skip` or an empty commit nobody wants, so it is aborted: nothing was
+ * changed, and leaving a sequencer half open over nothing would be.
+ */
+export async function cherryPick(
+  dir: string,
+  hash: string
+): Promise<GitWriteResult> {
+  if (!HASH.test(hash)) return { ok: false, message: "Not a commit." }
+  let parents: string[]
+  try {
+    parents = (await git(dir, ["rev-list", "--parents", "-n1", hash]))
+      .trim()
+      .split(/\s+/)
+      .slice(1)
+  } catch {
+    return { ok: false, message: "Not a commit." }
+  }
+  const picked = await attempt(dir, [
+    "cherry-pick",
+    ...(parents.length > 1 ? ["-m", "1"] : []),
+    hash,
+  ])
+  if (picked.ok) return picked
+
+  const inProgress = await git(dir, [
+    "rev-parse",
+    "-q",
+    "--verify",
+    "CHERRY_PICK_HEAD",
+  ]).then(
+    () => true,
+    () => false
+  )
+  if (!inProgress) return picked
+  const unmerged = await git(dir, ["diff", "--name-only", "--diff-filter=U"])
+    .then((out) => out.trim())
+    .catch(() => "")
+  if (unmerged) return { ...picked, conflict: true }
+  await git(dir, ["cherry-pick", "--abort"]).catch(() => undefined)
+  return { ok: false, empty: true, message: picked.message }
+}
+
+/**
+ * What a picked commit is compared with, resolved to a hash — so the diff
+ * calls after it take hashes and nothing else.
+ *
+ * `upstream` is the checked-out branch's (`@{upstream}`), null without one.
+ * `mergeBase` is where the commit's line and `HEAD`'s last met, null where
+ * that is the commit itself — it is already in `HEAD`'s history, and the
+ * comparison would be empty. `ref` is a name somebody typed or picked, read
+ * by `rev-parse --verify` with options ended first, so it can be any
+ * revision git names (`v1.0`, `origin/main`, `HEAD~3`) but never a flag.
+ */
+export async function compareBase(
+  dir: string,
+  hash: string,
+  against: GitCompareAgainst
+): Promise<GitCompareBase | null> {
+  if (!HASH.test(hash)) return null
+  const resolve = (spec: string) =>
+    git(dir, [
+      "rev-parse",
+      "--verify",
+      "--quiet",
+      "--end-of-options",
+      `${spec}^{commit}`,
+    ]).then(
+      (out) => out.trim() || null,
+      () => null
+    )
+
+  switch (against?.kind) {
+    case "upstream": {
+      const name = await git(dir, [
+        "rev-parse",
+        "--abbrev-ref",
+        "--symbolic-full-name",
+        "@{upstream}",
+      ]).then(
+        (out) => out.trim() || null,
+        () => null
+      )
+      if (!name) return null
+      const base = await resolve("@{upstream}")
+      return base ? { hash: base, label: name } : null
+    }
+    case "mergeBase": {
+      const [base, self] = await Promise.all([
+        git(dir, ["merge-base", "HEAD", hash]).then(
+          (out) => out.trim() || null,
+          () => null
+        ),
+        resolve(hash),
+      ])
+      if (!base || base === self) return null
+      return { hash: base, label: base.slice(0, 7) }
+    }
+    case "ref": {
+      const ref = typeof against.ref === "string" ? against.ref.trim() : ""
+      if (!ref || ref.startsWith("-") || /[\s\0]/.test(ref)) return null
+      const base = await resolve(ref)
+      return base ? { hash: base, label: ref } : null
+    }
+    default:
+      return null
+  }
+}
+
+/** A commit's whole message — subject, body and trailers — for the menu's
+ * `Copy Commit Message`, since the log carries the subject alone. */
+export async function commitMessage(
+  dir: string,
+  hash: string
+): Promise<string | null> {
+  if (!HASH.test(hash)) return null
+  return git(dir, ["log", "-1", "--format=%B", hash]).then(
+    (out) => out.trim(),
+    () => null
+  )
+}
 
 /** Whether `HEAD` has this path — the question that decides whether discarding
  * it is a restore or a deletion. False for a repository with no commits, where

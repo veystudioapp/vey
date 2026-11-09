@@ -554,17 +554,24 @@ export function CommitFiles({
   commit,
   root,
   files,
+  base,
 }: {
   commit: GitCommit
   root: FileRoot
   files: GitCommitFile[] | undefined
+  /** A comparison's left side, in place of the first parent. */
+  base?: { hash: string; label: string }
 }) {
   const selected = useChanges((state) => state.commitFile[root.id] ?? null)
   const t = useT()
 
   if (files === undefined) return <Note indent>{t("files.reading")}</Note>
   if (files.length === 0) {
-    return <Note indent>{t("files.commits.noFiles")}</Note>
+    return (
+      <Note indent>
+        {base ? t("files.graph.compareSame") : t("files.commits.noFiles")}
+      </Note>
+    )
   }
 
   return (
@@ -578,7 +585,9 @@ export function CommitFiles({
             <SideRow
               indent={1.5}
               active={
-                selected?.hash === commit.hash && selected.path === file.path
+                selected?.hash === commit.hash &&
+                selected.path === file.path &&
+                selected.base?.hash === base?.hash
               }
               title={file.from ? `${file.from} → ${file.path}` : file.path}
               onClick={() =>
@@ -588,6 +597,7 @@ export function CommitFiles({
                   subject: commit.subject,
                   path: file.path,
                   ...(file.from === undefined ? {} : { from: file.from }),
+                  ...(base ? { base } : {}),
                 })
               }
             >

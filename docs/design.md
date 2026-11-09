@@ -1393,8 +1393,10 @@ Three more, each something a reader kept leaving the list for:
 - **The blame card's menu** on a row — copy SHA or message, `Ask in chat`
   (typed, unsent), open on the forge.
 
-Still refused: checkout, revert, cherry-pick — the dock's shell is the git
-client.
+Still refused here: checkout, revert, cherry-pick — the dock's shell is the git
+client. The `Git Graph` tab's menu has since let checkout, cherry-pick and
+making a branch or tag in (§ The Git Graph tab's menu); this sidebar's menu
+stayed the blame card's.
 
 ### The commit graph
 
@@ -1414,7 +1416,8 @@ The list without it answered "what happened on this branch" and could not say
 `main`, and the branch a teammate pushed this morning was not there at all
 without a `git log --graph --all` in the dock's shell, which is the question
 the view exists to save a trip for. A graph is still a reading of history, not
-a client — nothing on it checks out, merges or moves a ref.
+a client — nothing on it merges, rebases or moves an existing ref (its menu's
+four writes are § The Git Graph tab's menu).
 
 - **Drawn from `%P`**, the parents the log already walks — one field more, no
   second git call. The lanes are computed in the renderer
@@ -1510,10 +1513,54 @@ columns and ten lanes side by side.
   with the same commits and refs keeps the one on screen, and the rows are
   memoised. The next page is asked for before the end is reached, and a new
   branch or filter dims the list only once it has taken a moment. The right-click menu is
-  that view's. **Nothing here writes** — no checkout, branch, merge or tag from
-  a row, which is still the dock's shell's.
+  its own — next section.
 - Refresh is a button as well as the status signal: a fetch in another app moves
   the remote-tracking refs without touching anything watched.
+
+### The Git Graph tab's menu
+
+**This reverses "nothing here writes".** A row's right-click menu is the one
+GitLens taught people to expect, in its order: `Open Changes`, `Checkout
+(Detached)`, `Create Branch…`, `Create Tag…`, `Cherry Pick`, three `Compare
+with…`, copy hash and message, `Add to Chat`, `Explain Changes`
+(`files/graph-commit-menu.tsx`). The tab was a reading of history that sent
+the reader to the dock's shell for the first thing they wanted to do with what
+they had read — make a branch at this commit, bring that fix onto this
+branch — and the shell then needed the hash copied across by hand. The argument
+that kept them out ("the shell is the git client") was about not growing a
+second client; four writes that each **make something new or move `HEAD`**, and
+that git itself refuses where they would lose work, are not that. Merge,
+rebase, reset, revert, amend and deleting a ref stay the shell's.
+
+- **main runs them** (`checkoutDetached`, `createBranch`, `createTag`,
+  `cherryPick` in `main/git.ts`, `test/git-graph-menu.ts`), each answering
+  with git's own words rather than throwing — a refusal is a sentence for the
+  reader, drawn in a line under the toolbar (gone after a few seconds when it
+  worked, kept when it did not). Nothing prompts: no terminal, and
+  `GIT_EDITOR=:`. A name is checked before git sees it (no leading `-`, then
+  `check-ref-format`) and a commit is a hash and nothing else.
+- **A cherry-pick that conflicts is left conflicted** — the markers in the
+  files are what the `Changes` list and the editor's Accept buttons exist for,
+  and the line says so with a way there. One that comes out **empty** (the
+  branch already has the change) is aborted: it stops in progress waiting for
+  a `--skip`, and a sequencer left open over nothing is a trap for the next
+  `git commit`. A merge is picked against its first parent.
+- **A comparison is the commit panel with another left side**: `commitFiles`
+  and `commitFileDiff` take a `base`, which `compareBase` resolved to a hash
+  first — the branch's upstream, the merge base with `HEAD` (greyed when that
+  is the commit itself, as it is for anything already in `HEAD`'s history), or
+  any revision typed or picked in `Compare with…` (read with
+  `--end-of-options`, so never a flag). A file opens in the checkout's one diff
+  tab, its header naming both sides; picking another row ends the comparison.
+- **`Open Changes`** picks the commit and puts its first file in the diff tab,
+  the rest listed in the panel.
+- **`Explain Changes` starts a chat** in the project and sends it at once — a
+  conversation somebody can keep talking in, asked for out loud, not a helper
+  turn. It names the hash and leaves the reading to the CLI's `git show`
+  rather than pasting a diff that may be thousands of lines. `Add to Chat` is
+  the blame card's `Ask in chat`: typed into the composer on screen, unsent.
+- `Copy Commit Message` copies the whole message, body and trailers
+  (`commitMessage`), since the log row carries the subject alone.
 
 ### Who last changed a line
 

@@ -129,6 +129,9 @@ export type CommitFileTarget = {
   /** The repository's path, `/`-separated — see `GitCommitFile`. */
   path: string
   from?: string
+  /** The left side, for a comparison from the Git Graph's menu — a hash
+   * `gitCompareBase` answered, and its name. Absent: the first parent. */
+  base?: { hash: string; label: string }
 }
 
 export const useChanges = create<ChangesState>((set, get) => ({

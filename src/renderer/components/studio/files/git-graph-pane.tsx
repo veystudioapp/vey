@@ -13,8 +13,10 @@ import type {
   GitChange,
   GitCommit,
   GitCommitFile,
+  GitCompareAgainst,
   GitLogScope,
   GitUpstream,
+  GitWriteResult,
 } from "@shared/api"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ContextMenu, ContextMenuTrigger } from "@/components/ui/context-menu"
@@ -65,7 +67,14 @@ import { FileIcon } from "../file-icon"
 import { SECTION_ACCENT } from "../section-marks"
 import { SideRow } from "../side-row"
 import { CommitGraphCanvas, GRAPH_ROW, graphPixels } from "./commit-graph"
-import { CommitFiles, CommitMenu, readCommits } from "./commits-list"
+import { CommitFiles, readCommits } from "./commits-list"
+import {
+  CompareWithDialog,
+  CreateRefDialog,
+  GraphCommitMenu,
+  type GraphDialog,
+  type GraphMenuActions,
+} from "./graph-commit-menu"
 import { RefChips } from "./ref-chip"
 
 /** How many commits the tab starts with, and how many `Load more` adds. More
@@ -276,10 +285,21 @@ function GitGraphView({ root }: { root: FileRoot }) {
    * torn it in two.
    */
   const [selected, select] = useState<string | null>(null)
-  const toggle = useCallback(
-    (hash: string) => select((current) => (current === hash ? null : hash)),
-    []
-  )
+  /**
+   * A comparison opened from the menu: the commit on the right, what it is
+   * compared with on the left. It belongs to the picked commit — picking
+   * another drops it — and its files are read once per pair, like a commit's.
+   */
+  const [compare, setCompare] = useState<{
+    hash: string
+    base: { hash: string; label: string }
+  } | null>(null)
+  // Picking any row ends a comparison, rather than it coming back with the
+  // row it was opened on.
+  const toggle = useCallback((hash: string) => {
+    setCompare(null)
+    select((current) => (current === hash ? null : hash))
+  }, [])
   // A commit's files never change, so each is read once, the first time it is
   // picked — the arrows walking past it again cost nothing.
   const [files, setFiles] = useState<Record<string, GitCommitFile[]>>({})
@@ -295,6 +315,126 @@ function GitGraphView({ root }: { root: FileRoot }) {
   }, [selected, root.folderId])
   const [target, setTarget] = useState<GitCommit | null>(null)
   const commits = read?.commits
+
+  const comparing = compare && compare.hash === selected ? compare : null
+  const compareKey = comparing ? `${comparing.base.hash}:${comparing.hash}` : ""
+  useEffect(() => {
+    if (!comparing || files[compareKey]) return
+    const { hash, base } = comparing
+    void window.desktop
+      .gitCommitFiles(root.folderId, hash, base.hash)
+      .catch(() => [])
+      .then((answer) =>
+        setFiles((state) => ({ ...state, [compareKey]: answer }))
+      )
+    // `compareKey` is the comparison's identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [compareKey, root.folderId])
+
+  /** Whether the menu's commit has a merge base with `HEAD` other than
+   * itself, asked as the menu opens so the item can be greyed. */
+  const [mergeBaseOf, setMergeBaseOf] = useState<string | null>(null)
+  useEffect(() => {
+    if (!target) return
+    let current = true
+    void window.desktop
+      .gitCompareBase(root.folderId, target.hash, { kind: "mergeBase" })
+      .catch(() => null)
+      .then((base) => {
+        if (current) setMergeBaseOf(base ? target.hash : null)
+      })
+    return () => {
+      current = false
+    }
+  }, [target, root.folderId])
+
+  const [dialog, setDialog] = useState<GraphDialog>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  useEffect(() => {
+    if (!notice?.ok) return
+    const timer = setTimeout(() => setNotice(null), NOTICE_MS)
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  /** After a write: the graph, the branch name beside the project and the
+   * working tree all re-read, rather than waiting on a watcher that a ref
+   * made under `.git` may not wake. */
+  const afterWrite = useCallback(() => {
+    setRefreshes((value) => value + 1)
+    void useStudio.getState().refreshBranches()
+  }, [])
+
+  const actions: GraphMenuActions = {
+    openChanges(commit) {
+      setCompare(null)
+      select(commit.hash)
+      void window.desktop
+        .gitCommitFiles(root.folderId, commit.hash)
+        .catch(() => [] as GitCommitFile[])
+        .then((answer) => {
+          setFiles((state) => ({ ...state, [commit.hash]: answer }))
+          asked.current.add(commit.hash)
+          const first = answer[0]
+          if (!first) return
+          useChanges.getState().openCommitFile(root.id, {
+            hash: commit.hash,
+            shortHash: commit.shortHash,
+            subject: commit.subject,
+            path: first.path,
+            ...(first.from === undefined ? {} : { from: first.from }),
+          })
+        })
+    },
+    compare(commit, against: GitCompareAgainst) {
+      void window.desktop
+        .gitCompareBase(root.folderId, commit.hash, against)
+        .catch(() => null)
+        .then((base) => {
+          if (!base) {
+            setNotice({
+              ok: false,
+              text: t("files.graph.menu.nothingToCompare"),
+            })
+            return
+          }
+          setCompare({ hash: commit.hash, base })
+          select(commit.hash)
+        })
+    },
+    write(run, done) {
+      setNotice(null)
+      void run()
+        .catch((failure: unknown): GitWriteResult => ({
+          ok: false,
+          message: failure instanceof Error ? failure.message : String(failure),
+        }))
+        .then((answer) => {
+          afterWrite()
+          if (answer.ok) setNotice({ ok: true, text: done })
+          else if (answer.conflict)
+            setNotice({
+              ok: false,
+              text: t("files.graph.menu.conflict"),
+              detail: answer.message,
+              changes: true,
+            })
+          else if (answer.empty)
+            setNotice({ ok: false, text: t("files.graph.menu.alreadyPicked") })
+          else setNotice({ ok: false, text: answer.message })
+        })
+    },
+    ask: setDialog,
+  }
+  const tags = useMemo(
+    () => [
+      ...new Set(
+        (commits ?? []).flatMap((commit) =>
+          commit.refs.filter((ref) => ref.kind === "tag").map((ref) => ref.name)
+        )
+      ),
+    ],
+    [commits]
+  )
   const selectedCommit =
     commits?.find((commit) => commit.hash === selected) ?? null
   const selectedIndex = selectedCommit ? commits!.indexOf(selectedCommit) : -1
@@ -364,6 +504,7 @@ function GitGraphView({ root }: { root: FileRoot }) {
     if (!commits || commits.length === 0) return
     if (event.key === "Escape" && selected) {
       event.preventDefault()
+      setCompare(null)
       select(null)
       return
     }
@@ -377,7 +518,9 @@ function GitGraphView({ root }: { root: FileRoot }) {
     ]
     const from = pickedRow < 0 ? (step > 0 ? -1 : keys.length) : pickedRow
     const next = keys[Math.max(0, Math.min(keys.length - 1, from + step))]
-    if (next) select(next)
+    if (!next) return
+    setCompare(null)
+    select(next)
   }
 
   return (
@@ -390,6 +533,7 @@ function GitGraphView({ root }: { root: FileRoot }) {
         onScope={(next) => useGitGraph.getState().setScope(root.id, next)}
         onRefresh={() => setRefreshes((value) => value + 1)}
       />
+      {notice && <NoticeLine notice={notice} onClose={() => setNotice(null)} />}
 
       <div
         ref={scroller}
@@ -493,7 +637,14 @@ function GitGraphView({ root }: { root: FileRoot }) {
                   />
                 ))}
               </ContextMenuTrigger>
-              <CommitMenu commit={target} webUrl={upstream?.webUrl ?? null} />
+              <GraphCommitMenu
+                commit={target}
+                root={root}
+                upstream={upstream?.name ?? null}
+                webUrl={upstream?.webUrl ?? null}
+                mergeBase={!!target && mergeBaseOf === target.hash}
+                actions={actions}
+              />
             </ContextMenu>
             {graph && (
               // Cut at the column's edge: a graph column dragged narrower than
@@ -535,13 +686,101 @@ function GitGraphView({ root }: { root: FileRoot }) {
         <CommitPanel
           commit={selectedCommit}
           root={root}
-          files={files[selectedCommit.hash]}
+          base={comparing?.base}
+          files={files[comparing ? compareKey : selectedCommit.hash]}
           onClose={() => select(null)}
+          onEndCompare={() => setCompare(null)}
         />
       )}
       {workingPicked && (
         <UncommittedPanel root={root} onClose={() => select(null)} />
       )}
+
+      {(dialog?.kind === "branch" || dialog?.kind === "tag") && (
+        <CreateRefDialog
+          kind={dialog.kind}
+          commit={dialog.commit}
+          root={root}
+          onDone={(text) => {
+            afterWrite()
+            setNotice({ ok: true, text })
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog?.kind === "compare" && (
+        <CompareWithDialog
+          commit={dialog.commit}
+          root={root}
+          branches={branches}
+          tags={tags}
+          onCompare={(base) => {
+            setCompare({ hash: dialog.commit.hash, base })
+            select(dialog.commit.hash)
+          }}
+          onClose={() => setDialog(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/** How long a write that worked is said for; one that failed stays. */
+const NOTICE_MS = 6000
+
+/** What the last write from the menu came to, in a line under the toolbar. */
+type Notice = {
+  ok: boolean
+  text: string
+  /** git's own words under the line, for a refusal worth reading whole. */
+  detail?: string
+  /** A conflict's way on: the `Changes` list, where it is resolved. */
+  changes?: boolean
+}
+
+function NoticeLine({
+  notice,
+  onClose,
+}: {
+  notice: Notice
+  onClose: () => void
+}) {
+  const t = useT()
+  return (
+    <div
+      role="status"
+      className={cn(
+        "flex shrink-0 items-start gap-2 border-b px-3 py-1.5",
+        notice.ok
+          ? "bg-muted/30 text-muted-foreground"
+          : "bg-destructive/5 text-destructive"
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="font-mono whitespace-pre-wrap">{notice.text}</p>
+        {notice.detail && (
+          <p className="mt-0.5 line-clamp-3 font-mono text-[0.65rem] whitespace-pre-wrap opacity-80">
+            {notice.detail}
+          </p>
+        )}
+      </div>
+      {notice.changes && (
+        <button
+          type="button"
+          onClick={openChanges}
+          className="shrink-0 rounded px-1.5 py-0.5 text-[0.65rem] text-primary hover:bg-primary/10"
+        >
+          {t("files.graph.menu.resolve")}
+        </button>
+      )}
+      <button
+        type="button"
+        aria-label={t("files.graph.menu.dismiss")}
+        onClick={onClose}
+        className="shrink-0 rounded p-0.5 hover:bg-accent/50"
+      >
+        <X className="size-3.5" />
+      </button>
     </div>
   )
 }
@@ -718,20 +957,44 @@ function DetailsPanel({
 function CommitPanel({
   commit,
   root,
+  base,
   files,
   onClose,
+  onEndCompare,
 }: {
   commit: GitCommit
   root: FileRoot
+  /** A comparison's left side, from the menu; absent, the first parent. */
+  base?: { hash: string; label: string }
   files: GitCommitFile[] | undefined
   onClose: () => void
+  onEndCompare: () => void
 }) {
   const t = useT()
   return (
     <DetailsPanel
       onClose={onClose}
+      actions={
+        base && (
+          <button
+            type="button"
+            onClick={onEndCompare}
+            className="shrink-0 rounded px-1.5 py-0.5 text-[0.65rem] text-primary hover:bg-primary/10"
+          >
+            {t("files.graph.menu.endCompare")}
+          </button>
+        )
+      }
       heading={
         <>
+          {base && (
+            <p className="mb-0.5 truncate text-[0.65rem] text-primary">
+              {t("files.graph.menu.comparing", {
+                hash: commit.shortHash,
+                base: base.label,
+              })}
+            </p>
+          )}
           <p className="truncate font-medium" title={commit.subject}>
             {commit.subject}
           </p>
@@ -749,7 +1012,7 @@ function CommitPanel({
         </>
       }
     >
-      <CommitFiles commit={commit} root={root} files={files} />
+      <CommitFiles commit={commit} root={root} files={files} base={base} />
     </DetailsPanel>
   )
 }

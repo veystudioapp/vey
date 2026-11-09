@@ -37,12 +37,18 @@ export function CommitDiff({
     target: CommitFileTarget
     diff: GitCommitFileDiff
   } | null>(null)
-  const key = `${target.hash}:${target.path}`
+  const key = `${target.base?.hash ?? ""}:${target.hash}:${target.path}`
 
   useEffect(() => {
     let alive = true
     void window.desktop
-      .gitCommitFileDiff(folderId, target.hash, target.path, target.from)
+      .gitCommitFileDiff(
+        folderId,
+        target.hash,
+        target.path,
+        target.from,
+        target.base?.hash
+      )
       .catch((): GitCommitFileDiff => ({
         before: null,
         after: null,
@@ -74,6 +80,12 @@ export function CommitDiff({
           title={`${shown.path}\n\n${shown.hash}\n${shown.subject}`}
           className="flex min-w-0 flex-1 items-baseline gap-2 font-mono text-xs"
         >
+          {shown.base && (
+            // A comparison names its left side first, the way the panes read.
+            <span className="shrink-0 text-muted-foreground">
+              {shown.base.label} ↔
+            </span>
+          )}
           <span className="shrink-0 rounded bg-amber-500/10 px-1 font-medium text-amber-600 dark:text-amber-400">
             {shown.shortHash}
           </span>
