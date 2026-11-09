@@ -56,6 +56,10 @@ export type SeenTask = {
    * ClickUp answers with. Absent until they are first read, so an edit is only
    * seen to a comment read once before it. */
   said?: Record<string, string>
+  /** Each thread read, by the id of the comment it hangs off: the reply count
+   * ClickUp gave when it was read — another count is a reply since — and its
+   * replies' texts, as `said` is for the task's own comments. */
+  threads?: Record<string, Thread>
   /** Name by id. */
   assignees?: Record<string, string>
   priority?: string | null
@@ -63,12 +67,15 @@ export type SeenTask = {
   tags?: string[]
 }
 
+export type Thread = { count: number; said: Record<string, string> }
+
 function seenOf(
   task: TaskRow,
-  said: Record<string, string> | undefined,
+  heard: Pick<SeenTask, "said" | "threads">,
   /** The description last seen, kept when this reading has none. */
   body?: string
 ): SeenTask {
+  const { said, threads } = heard
   const text = task.description ?? body
   return {
     status: task.status,
@@ -83,6 +90,7 @@ function seenOf(
     due: task.due,
     tags: task.tags,
     ...(said ? { said } : {}),
+    ...(threads ? { threads } : {}),
   }
 }
 
@@ -134,6 +142,40 @@ export function commentTargets(
   return [...changed, ...recent].slice(0, MAX_COMMENT_READS)
 }
 
+/** Thread reads per poll, on top of `MAX_COMMENT_READS` — together under the
+ * hundred a minute ClickUp allows a personal key. */
+const MAX_THREAD_READS = 20
+
+/**
+ * The threads one poll reads, out of the comments it has just read: a thread
+ * whose reply count is not the one it was last read at (a reply since, or
+ * never read), then — for an edit, which moves no count — every other thread
+ * on a task ClickUp says changed. Newest comment first in each, at most
+ * `MAX_THREAD_READS`; the rest are still unread next poll and so read then.
+ */
+export function threadTargets(
+  record: InboxRecord,
+  comments: Map<string, CommentRow[]>,
+  changed: Set<string>
+): { taskId: string; commentId: string }[] {
+  const stale: { taskId: string; commentId: string; at: number }[] = []
+  const settled: typeof stale = []
+  for (const [taskId, read] of comments) {
+    const stored = record.seen[taskId]
+    const threads = (typeof stored === "object" && stored.threads) || {}
+    for (const comment of read) {
+      if (comment.parentId !== undefined || !comment.replies) continue
+      const target = { taskId, commentId: comment.id, at: comment.at }
+      if (threads[comment.id]?.count !== comment.replies) stale.push(target)
+      else if (changed.has(taskId)) settled.push(target)
+    }
+  }
+  const newest = (a: { at: number }, b: { at: number }) => b.at - a.at
+  return [...stale.sort(newest), ...settled.sort(newest)]
+    .slice(0, MAX_THREAD_READS)
+    .map(({ taskId, commentId }) => ({ taskId, commentId }))
+}
+
 /** An edit's id: the comment and both texts, so the same edit read on two
  * polls is one item and a second edit to the same comment is another. */
 function editId(commentId: string, before: string, after: string): string {
@@ -164,7 +206,7 @@ export function baselineOf(
   const seen: Record<string, SeenTask> = {}
   let cursor = 0
   for (const task of tasks) {
-    seen[task.id] = seenOf(task, undefined)
+    seen[task.id] = seenOf(task, {})
     cursor = Math.max(cursor, task.updatedAt)
   }
   return {
@@ -230,12 +272,21 @@ export function foldPoll(
     editAt: number
   ) => {
     const said = (typeof stored === "object" && stored.said) || {}
+    const threads = (typeof stored === "object" && stored.threads) || {}
     for (const comment of read ?? []) {
-      const before = said[comment.id]
+      const thread =
+        comment.parentId === undefined ? undefined : threads[comment.parentId]
+      const before =
+        comment.parentId === undefined
+          ? said[comment.id]
+          : thread?.said[comment.id]
       if (comment.at > 0) touch(blank.taskId, comment.at)
       const byMe = me !== null && comment.byId === me
       if (before === undefined) {
-        if (comment.at <= record.cursor) continue
+        // A reply missing from a thread read before is new whatever its date:
+        // the read may have waited behind `MAX_THREAD_READS` while the cursor
+        // moved past it.
+        if (thread === undefined && comment.at <= record.cursor) continue
         say({
           id: `comment:${comment.id}`,
           kind: me && comment.mentions.includes(me) ? "mention" : "comment",
@@ -377,10 +428,10 @@ export function foldPoll(
     seen[task.id] = seenOf(
       task,
       read
-        ? saidOf(read)
+        ? heardOf(read, stored)
         : typeof stored === "object"
-          ? stored.said
-          : undefined,
+          ? { said: stored.said, threads: stored.threads }
+          : {},
       was?.body
     )
     touch(task.id, task.updatedAt)
@@ -403,7 +454,7 @@ export function foldPoll(
     }
     // No task date moved, so an edit found here is dated now.
     readComments(read, stored, nowMs)
-    seen[id] = { ...stored, said: saidOf(read) }
+    seen[id] = { ...stored, ...heardOf(read, stored) }
   }
 
   for (const [id, at] of Object.entries(active)) {
@@ -437,6 +488,31 @@ function sameSet(a: string[], b: string[]): boolean {
 /** Each comment's text by id, for `SeenTask.said`. */
 function saidOf(read: CommentRow[]): Record<string, string> {
   return Object.fromEntries(read.map((comment) => [comment.id, comment.text]))
+}
+
+/**
+ * What one reading of a task's comments leaves in `seen`: the task's own
+ * comments' texts, and each thread — the replies read with it, or, for a
+ * thread not read this poll, what it was last read as. A thread whose comment
+ * is no longer among the newest is dropped with it.
+ */
+function heardOf(
+  read: CommentRow[],
+  stored: SeenTask | string | undefined
+): Pick<SeenTask, "said" | "threads"> {
+  const before = (typeof stored === "object" && stored.threads) || {}
+  const own = read.filter((comment) => comment.parentId === undefined)
+  const threads: Record<string, Thread> = {}
+  for (const comment of own) {
+    if (!comment.replies) continue
+    const replies = read.filter((reply) => reply.parentId === comment.id)
+    if (replies.length > 0) {
+      threads[comment.id] = { count: comment.replies, said: saidOf(replies) }
+    } else if (before[comment.id]) {
+      threads[comment.id] = before[comment.id]!
+    }
+  }
+  return { said: saidOf(own), threads }
 }
 
 const EMPTY: Omit<InboxItem, "id" | "kind" | "at" | "read"> = {
@@ -654,6 +730,17 @@ export class ClickupInbox {
         : []) {
         const answer = await source.comments(id)
         if (!("error" in answer)) comments.set(id, answer)
+      }
+      // ClickUp lists a task's comments without their replies, so each
+      // thread worth reading is a read of its own, folded in beside them.
+      const changed = new Set(tasks.map((task) => task.id))
+      for (const { taskId, commentId } of threadTargets(
+        target,
+        comments,
+        changed
+      )) {
+        const answer = await source.replies(commentId)
+        if (!("error" in answer)) comments.get(taskId)?.push(...answer)
       }
 
       const at = new Date().toISOString()

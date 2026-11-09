@@ -1974,9 +1974,10 @@ Not pasted tasks and not agents — **one list per project**, and what reaches
 the inbox is what the poll already has in hand: a task new to the list; its
 status, title, description, priority, due date, tags or assignees changed —
 with an assignment **to you** its own kind; a comment written, written
-mentioning you, or edited. Only what costs no request beyond the list's page
-and the comments: a checklist, an attachment, a custom field or a threaded
-reply is a request per task, and a due date drawing near is not a change.
+mentioning you, or edited — a reply in a comment's thread included. Otherwise
+only what costs no request beyond the list's page and the comments: a
+checklist, an attachment or a custom field is a request per task, and a due
+date drawing near is not a change.
 Read-only, both ways: nothing is written to ClickUp.
 
 "You" is the signed-in user, asked once per sign-in (`clickup_get_user`,
@@ -2027,6 +2028,19 @@ remembered and not announced. A `seen` entry written as a bare
 status, before titles and descriptions were followed, compares only the status
 until the task next changes. An item's id is what it is about, so one found
 twice is listed once (`foldPoll`, `test/clickup-inbox.ts`).
+
+**Threaded replies were left out first, and that was wrong.** ClickUp lists a
+task's comments without their replies, so a reply cost a request of its own
+and was skipped — and a conversation held in a thread, which is where a team
+answers a question, never reached the inbox at all. Now a comment carries its
+`reply_count`, and a thread is read (`GET /comment/{id}/reply`,
+`clickup_get_threaded_comments`) when that count is not the one it was last
+read at, or — for an edit, which moves no count — when its task changed; at
+most twenty a poll, newest first (`threadTargets`). Its replies fold in beside
+the task's own comments and are the same kinds: a comment, a mention, an
+edit. `seen` keeps each thread's count and texts (`threads`), and a reply
+missing from a thread read before is new whatever its date, since its read may
+have waited behind the cap while the cursor moved on.
 Connecting reads the whole list once into `seen` and announces nothing. The
 cursor is ClickUp's own clock (the newest `date_updated`), so this machine's
 does not matter.

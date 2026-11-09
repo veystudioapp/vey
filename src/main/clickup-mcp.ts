@@ -722,7 +722,22 @@ export function mcpSource(client: ClickupMcp, key: string): ClickupSource {
     return commentsOf({ comments: arrayIn(got, "comments") })
   }
 
-  return { key, me, resolveList, list, tasks, comments }
+  async function replies(commentId: string) {
+    const got = await call("clickup_get_threaded_comments", {
+      comment_id: commentId,
+    })
+    if (got && typeof got === "object" && "error" in got) {
+      return got as { error: string }
+    }
+    // Undocumented, so either key: the REST answer's `comments`, or `replies`.
+    const found = arrayIn(got, "comments")
+    return commentsOf(
+      { comments: found.length > 0 ? found : arrayIn(got, "replies") },
+      commentId
+    )
+  }
+
+  return { key, me, resolveList, list, tasks, comments, replies }
 }
 
 function reasonOf(error: unknown): string {

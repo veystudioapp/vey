@@ -69,6 +69,12 @@ export type CommentRow = {
   at: number
   /** The ids of the people the comment @-mentions. */
   mentions: string[]
+  /** How many replies its thread has, as ClickUp counts them — the replies
+   * themselves are a read of their own (`ClickupSource.replies`). 0 for a
+   * reply. */
+  replies?: number
+  /** The comment a reply is in the thread of; absent for a task's own. */
+  parentId?: string
 }
 
 /** The most of one text kept: a description or a comment longer than this is
@@ -129,6 +135,9 @@ export type ClickupSource = {
   list: (listId: string) => Promise<Answer<{ id: string; name: string }>>
   tasks: (listId: string, after: number | null) => Promise<Answer<TaskRow[]>>
   comments: (taskId: string) => Promise<Answer<CommentRow[]>>
+  /** The replies in a comment's thread, oldest first. ClickUp lists a task's
+   * comments without them, so a reply is never in `comments`. */
+  replies: (commentId: string) => Promise<Answer<CommentRow[]>>
 }
 
 /** ClickUp's `parent.type` for a view that belongs to one list. */
@@ -177,6 +186,7 @@ export function restSource(fetch: Fetch, token: string): ClickupSource {
     list: (listId) => fetchList(fetch, token, listId),
     tasks: (listId, after) => fetchTasks(fetch, token, listId, after),
     comments: (taskId) => fetchComments(fetch, token, taskId),
+    replies: (commentId) => fetchReplies(fetch, token, commentId),
   }
 }
 
@@ -260,6 +270,22 @@ export async function fetchComments(
   return commentsOf(got.body)
 }
 
+/** A comment's thread — `GET /comment/{id}/reply`, oldest first. */
+export async function fetchReplies(
+  fetch: Fetch,
+  token: string,
+  commentId: string
+): Promise<Answer<CommentRow[]>> {
+  const got = await get(
+    fetch,
+    token,
+    `${API}/comment/${encodeURIComponent(commentId)}/reply`,
+    "ClickUp has no such comment, or the key cannot see it."
+  )
+  if ("error" in got) return got
+  return commentsOf(got.body, commentId)
+}
+
 /** ClickUp's task JSON narrowed to a row, or null for one with no id. Checked
  * rather than cast: a field misread here is an item announced every poll. */
 export function taskRowOf(value: unknown): TaskRow | null {
@@ -307,8 +333,12 @@ export function taskRowOf(value: unknown): TaskRow | null {
 }
 
 /** ClickUp's `comments` array, oldest first — sorted by date rather than
- * trusted, since ClickUp orders a task's newest first. */
-export function commentsOf(value: unknown): CommentRow[] {
+ * trusted, since ClickUp orders a task's newest first. `parentId` is the
+ * comment whose thread this is, for a read of replies. */
+export function commentsOf(
+  value: unknown,
+  parentId: string | null = null
+): CommentRow[] {
   const list = (value as { comments?: unknown } | null)?.comments
   if (!Array.isArray(list)) return []
   const rows: CommentRow[] = []
@@ -324,6 +354,10 @@ export function commentsOf(value: unknown): CommentRow[] {
       text: capped(str(raw.comment_text)),
       at: epoch(raw.date) ?? 0,
       mentions: mentionsIn(raw.comment),
+      // A number from the REST API, possibly a string through the MCP.
+      replies:
+        parentId === null ? Math.max(0, Number(raw.reply_count) || 0) : 0,
+      ...(parentId !== null ? { parentId } : {}),
     })
   }
   return rows.sort((a, b) => a.at - b.at)

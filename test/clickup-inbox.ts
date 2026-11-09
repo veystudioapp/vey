@@ -11,6 +11,7 @@ import {
 import {
   baselineOf,
   commentTargets,
+  threadTargets,
   ClickupInbox,
   foldPoll,
   MAX_ITEMS,
@@ -407,6 +408,107 @@ const reread = foldPoll(
   NOW
 )
 check("the same edit read again is not a second item", reread.added === 0)
+
+section("threads")
+// ClickUp lists a task's comments without their replies; a thread is read on
+// its own and its replies folded in beside them, carrying `parentId`.
+const own = (replies: number) => [
+  said("old", "A", "before", 70, { replies }),
+  said("new", "B", "after, reworded again", 125),
+]
+const after = reread.record.cursor + 10
+check(
+  "a thread never read is one to read",
+  JSON.stringify(
+    threadTargets(reread.record, new Map([["b", own(1)]]), new Set())
+  ) === JSON.stringify([{ taskId: "b", commentId: "old" }])
+)
+const threaded = foldPoll(
+  reread.record,
+  [],
+  new Map([
+    ["b", [...own(1), said("r1", "C", "a reply", after, { parentId: "old" })]],
+  ]),
+  NOW
+)
+check(
+  "a reply after the cursor is a comment",
+  threaded.added === 1 && threaded.record.items[0]?.id === "comment:r1",
+  threaded.record.items
+)
+check(
+  "a thread read at its count is not read again",
+  threadTargets(threaded.record, new Map([["b", own(1)]]), new Set()).length ===
+    0
+)
+check(
+  "unless its task changed, for an edit",
+  threadTargets(threaded.record, new Map([["b", own(1)]]), new Set(["b"]))
+    .length === 1
+)
+check(
+  "or its count moved",
+  threadTargets(threaded.record, new Map([["b", own(2)]]), new Set()).length ===
+    1
+)
+const late = foldPoll(
+  threaded.record,
+  [],
+  new Map([
+    [
+      "b",
+      [
+        ...own(2),
+        said("r1", "C", "a reply", after, { parentId: "old" }),
+        said("r0", "D", "a late reply", 5, { parentId: "old" }),
+      ],
+    ],
+  ]),
+  NOW
+)
+check(
+  "a reply new to a thread read before is new whatever its date",
+  late.added === 1 && late.record.items[0]?.id === "comment:r0",
+  late.record.items
+)
+const notReread = foldPoll(late.record, [], new Map([["b", own(2)]]), NOW)
+const keptThread = notReread.record.seen.b
+check(
+  "a thread not read this poll keeps what it was read as",
+  typeof keptThread === "object" &&
+    keptThread.threads?.old?.said.r1 === "a reply" &&
+    keptThread.threads.old.count === 2
+)
+const replyEdited = foldPoll(
+  notReread.record,
+  [],
+  new Map([
+    [
+      "b",
+      [
+        ...own(2),
+        said("r1", "C", "a reply, reworded", after, { parentId: "old" }),
+        said("r0", "D", "a late reply", 5, { parentId: "old" }),
+      ],
+    ],
+  ]),
+  NOW
+)
+check(
+  "an edited reply is an edit",
+  replyEdited.added === 1 &&
+    replyEdited.record.items[0]?.kind === "comment-edited" &&
+    replyEdited.record.items[0]?.before === "a reply",
+  replyEdited.record.items
+)
+const counted = commentsOf({
+  comments: [{ id: "1", comment_text: "x", date: "1", reply_count: "2" }],
+})
+check("a comment's reply count is read", counted[0]?.replies === 2)
+check(
+  "a reply carries its thread",
+  commentsOf({ comments: [{ id: "9", date: "1" }] }, "1")[0]?.parentId === "1"
+)
 
 section("commentTargets")
 const recently = {
