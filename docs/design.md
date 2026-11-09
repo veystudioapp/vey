@@ -1979,7 +1979,8 @@ and the comments: a checklist, an attachment, a custom field or a threaded
 reply is a request per task, and a due date drawing near is not a change.
 Read-only, both ways: nothing is written to ClickUp.
 
-"You" is the key's own user, asked once per key (`GET /user`, `whoAmI`). It
+"You" is the signed-in user, asked once per sign-in (`clickup_get_user`,
+`whoAmI`). It
 makes an assignment that adds you `assigned-me`, a comment whose rich text
 tags you (`mentionsIn`, a block of `type: "tag"`) `mention`, a task assigned
 to you `mine` and a comment you wrote or a task you made `byMe`.
@@ -2044,10 +2045,53 @@ than a day, without the task's date moving, is still missed until it next
 changes.
 
 `workspace/clickup-inbox.json` holds every project's inbox and is the only
-file. The key is one for the workspace — a personal token, checked against
-`GET /user`, sealed by `Host.seal` under `clickup.inboxToken` (the watcher's
-`clickup.token` was sealed in another shape and is left where it is). Requests
-go through `Host.fetch`, so a proxy reaches ClickUp the way the browser does.
+file.
+
+**ClickUp is read through its own MCP server, signed in with OAuth — or with
+a personal key.** `Sign in with ClickUp` connects this app to `mcp.clickup.com` itself
+(`main/clickup-mcp.ts`): dynamic client registration as a public client, PKCE,
+the code taken on a one-shot `127.0.0.1` port (RFC 8252), scope `read`, the
+grant sealed by `Host.seal` under `clickup.mcpGrant`, one for the workspace
+and never sent back. The calls are `tools/call` over Streamable HTTP, written
+by hand — three requests do not need the SDK's transport and its global
+`fetch` — through `Host.fetch`, so a proxy reaches ClickUp the way the browser
+does. The poll reads through one `ClickupSource`, which is what
+`test/clickup-inbox.ts` fakes.
+
+A sign-in waiting on the browser can be cancelled (`inbox:cancel-sign-in`
+aborts the wait and frees the port), and `Sign out` forgets the grant for
+every project — here only, since ClickUp publishes no revocation endpoint.
+The inboxes stay, unpolled, and pick up again after the next sign-in.
+
+Not the ClickUp connector the user's own `claude` already has, which is what
+was first asked for: its OAuth grant is claude.ai's, held on Anthropic's side,
+and reaching it would mean using the Claude login for something it was not
+given for. Nor OAuth into the **REST** API: the MCP server's token is its own,
+bound to `mcp.clickup.com/mcp` (it holds ClickUp's token behind it), and a
+REST OAuth app needs a client secret, so a server to keep it on — a sign-in
+needing nothing registered was the point.
+
+What it costs: the MCP's task listing carries no description, so each changed
+task is asked for again (`clickup_get_task`, at most 40 a poll) and a connect
+reads none — a description is first diffed on a task's second change after
+connecting. A view link's list is told from the view's own tasks, since the
+MCP has no view lookup. It does **not** know who made a change any better: its
+tools are the same v2 data. ClickUp says its MCP server serves a vetted list
+of clients; registration and the redirect to the consent page went through
+for this app, but consent itself was not tried when this was written. The
+tools answer as text meant for a model; `dataOf` reads it as JSON and says so
+when it is not.
+
+**A personal key, beside it.** The inbox first read the REST API with a
+pasted personal token, and that way stays as the other choice — it was
+deleted for a while and brought back, because the MCP server may refuse a
+client it has not vetted and its answers are a model's text, so the key is
+the way that keeps working when the sign-in does not. One of the two at a
+time: `inbox:set-key` (checked against `GET /user`, sealed under
+`clickup.inboxToken`) empties the grant and a sign-in empties the key, so which
+one the inbox reads through is never a guess; `Sign out` / `Remove key`
+forgets whichever there is. The key reads the full REST data — descriptions
+in the listing, a view resolved by `GET /view` — which the sign-in does not.
 
 The `Inbox` button sits beside `+ Chat`, with the unread count as its badge;
 there is no OS notification and the dock badge does not count it — both were

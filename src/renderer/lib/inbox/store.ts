@@ -1,6 +1,6 @@
 import { create } from "zustand"
 
-import type { ProjectInbox } from "@shared/api"
+import type { InboxAuth, ProjectInbox } from "@shared/api"
 import { NO_FILTER, type InboxFilter } from "./filter"
 import { projectOf } from "../project-checkouts"
 import { useProjects } from "../projects"
@@ -19,8 +19,8 @@ export type InboxView = "updates" | "tasks"
 
 type InboxState = {
   byFolder: Record<string, ProjectInbox>
-  /** Whether a ClickUp key is saved; null until asked. */
-  hasKey: boolean | null
+  /** How ClickUp is read — a key, a sign-in, or neither; null until asked. */
+  auth: InboxAuth | null
 
   openIds: string[]
   selectedId: string | null
@@ -45,7 +45,8 @@ type InboxState = {
   reorder: (ids: string[]) => void
   pick: (folderId: string, itemId: string) => void
   setEditing: (folderId: string, on: boolean) => void
-  setHasKey: (on: boolean) => void
+  setAuth: (auth: InboxAuth) => void
+  signOut: () => Promise<void>
   markAllRead: (folderId: string) => void
   setFilter: (folderId: string, patch: Partial<InboxFilter>) => void
   setView: (folderId: string, view: InboxView) => void
@@ -59,7 +60,7 @@ function byFolderOf(inboxes: ProjectInbox[]): Record<string, ProjectInbox> {
 
 export const useInbox = create<InboxState>((set, get) => ({
   byFolder: {},
-  hasKey: null,
+  auth: null,
   openIds: [],
   selectedId: null,
   picked: {},
@@ -69,11 +70,11 @@ export const useInbox = create<InboxState>((set, get) => ({
   pickedTask: {},
 
   async load() {
-    const [inboxes, hasKey] = await Promise.all([
+    const [inboxes, auth] = await Promise.all([
       window.desktop.inboxes(),
-      window.desktop.inboxHasKey(),
+      window.desktop.inboxAuth(),
     ])
-    set({ byFolder: byFolderOf(inboxes), hasKey })
+    set({ byFolder: byFolderOf(inboxes), auth })
   },
 
   listen() {
@@ -148,8 +149,13 @@ export const useInbox = create<InboxState>((set, get) => ({
     }))
   },
 
-  setHasKey(on) {
-    set({ hasKey: on })
+  setAuth(auth) {
+    set({ auth })
+  },
+
+  async signOut() {
+    await window.desktop.inboxSignOut()
+    set({ auth: "none" })
   },
 
   markAllRead(folderId) {

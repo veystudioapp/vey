@@ -261,8 +261,11 @@ const api: DesktopApi = {
   removePlugin: (id) => ipcRenderer.invoke(IPC.removePlugin, id),
 
   inboxes: () => ipcRenderer.invoke(IPC.inboxes),
-  inboxHasKey: () => ipcRenderer.invoke(IPC.inboxHasKey),
+  inboxAuth: () => ipcRenderer.invoke(IPC.inboxAuth),
   inboxSetKey: (token) => ipcRenderer.invoke(IPC.inboxSetKey, token),
+  inboxSignIn: () => ipcRenderer.invoke(IPC.inboxSignIn),
+  inboxCancelSignIn: () => ipcRenderer.invoke(IPC.inboxCancelSignIn),
+  inboxSignOut: () => ipcRenderer.invoke(IPC.inboxSignOut),
   inboxConnect: (folderId, list) =>
     ipcRenderer.invoke(IPC.inboxConnect, folderId, list),
   inboxDisconnect: (folderId) =>

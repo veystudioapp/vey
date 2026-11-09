@@ -1,14 +1,16 @@
 /**
- * The one place this app talks to ClickUp, and it only ever **reads**: the
- * inbox follows a list somebody else's team works in, and a second writer on
- * those tasks is not this app's business (`docs/design.md` § The ClickUp
- * inbox).
+ * What the inbox reads out of ClickUp, two ways — the REST API with a personal
+ * key, here (`restSource`), or ClickUp's own MCP server signed in with OAuth
+ * (`main/clickup-mcp.ts`) — and how a reading is narrowed. It only ever
+ * **reads**: the inbox follows a list somebody else's team works in, and a
+ * second writer on those tasks is not this app's business (`docs/design.md`
+ * § The ClickUp inbox).
  *
  * Free of `electron`: the key and `fetch` are arguments — `Host.fetch` in the
  * app, so a proxy or VPN reaches ClickUp the way the browser does — and
  * `test/clickup-inbox.ts` runs the narrowing under plain `bun`. Every failure
  * comes back as `{ error }` with a sentence, never a throw: one inbox's expired
- * key must not stop another's poll.
+ * key or sign-in must not stop another's poll.
  */
 
 const API = "https://api.clickup.com/api/v2"
@@ -38,8 +40,10 @@ export type TaskRow = {
   createdAt: number
   updatedAt: number
   /** The description as text, cut at `BODY_MAX`. Kept whole rather than as a
-   * hash so an edit can be shown as what changed, not only that it did. */
-  description: string
+   * hash so an edit can be shown as what changed, not only that it did. Null
+   * when this reading did not carry it — ClickUp's MCP lists tasks without
+   * one — which is not a description emptied. */
+  description: string | null
   /** In ClickUp's order; compared as a set. */
   assignees: Person[]
   /** ClickUp's word for it — `urgent`, `high`… — or null for none. */
@@ -94,8 +98,8 @@ export type ListRef = { list: string } | { view: string }
  * What ClickUp's address bar shows: `…/v/li/<id>` is the list itself;
  * `…/v/l/6-<id>-1` is an older view link whose middle number is the list (`6`
  * is ClickUp's parent type for a list); and `…/v/l/2kzkzpr0-438` — what a
- * list's own tabs show now — is a **view** id, opaque, its list found by
- * `resolveList`. Any view kind (`/v/b/` board, `/v/c/` calendar…) is the same.
+ * list's own tabs show now — is a **view** id, opaque, its list found by the
+ * source's `resolveList`. Any view kind (`/v/b/` board, `/v/c/` calendar…) is the same.
  * A bare run of digits is a list id typed by hand. Anything else — a task
  * link, a doc — is refused rather than guessed at.
  */
@@ -110,6 +114,21 @@ export function listRefIn(typed: string): ListRef | null {
   if (legacy) return { list: legacy[1]! }
   const view = /\/v\/[a-z]+\/([0-9a-z]+-\d+)(?:\/|$)/i.exec(path)
   return view ? { view: view[1]! } : null
+}
+
+/**
+ * What the inbox reads ClickUp through: `restSource` with a personal key, or
+ * `mcpSource` signed in — one shape, so the poll and its diff are one. A fake
+ * in `test/clickup-inbox.ts`.
+ */
+export type ClickupSource = {
+  /** Which key or sign-in this is, so its own user is asked once per one. */
+  key: string
+  me: () => Promise<Answer<Person>>
+  resolveList: (ref: ListRef) => Promise<Answer<string>>
+  list: (listId: string) => Promise<Answer<{ id: string; name: string }>>
+  tasks: (listId: string, after: number | null) => Promise<Answer<TaskRow[]>>
+  comments: (taskId: string) => Promise<Answer<CommentRow[]>>
 }
 
 /** ClickUp's `parent.type` for a view that belongs to one list. */
@@ -148,6 +167,17 @@ export function listOfView(body: unknown): Answer<string> {
     }
   }
   return id
+}
+
+export function restSource(fetch: Fetch, token: string): ClickupSource {
+  return {
+    key: `key:${token}`,
+    me: () => checkKey(fetch, token),
+    resolveList: (ref) => resolveList(fetch, token, ref),
+    list: (listId) => fetchList(fetch, token, listId),
+    tasks: (listId, after) => fetchTasks(fetch, token, listId, after),
+    comments: (taskId) => fetchComments(fetch, token, taskId),
+  }
 }
 
 /** Whether the key opens anything at all — `GET /user`. */
@@ -236,7 +266,16 @@ export function taskRowOf(value: unknown): TaskRow | null {
   const task = (value ?? {}) as Record<string, unknown>
   const id = str(task.id)
   if (!id) return null
-  const status = task.status as { status?: unknown; color?: unknown } | null
+  // ClickUp's v2 object from the REST API; through the MCP, whose answers are
+  // not documented, possibly a bare string — both are read.
+  const status = (
+    typeof task.status === "string" ? { status: task.status } : task.status
+  ) as { status?: unknown; color?: unknown } | null
+  const body = task.text_content ?? task.description
+  const priority =
+    typeof task.priority === "string"
+      ? task.priority
+      : str((task.priority as { priority?: unknown } | null)?.priority)
   return {
     id,
     name: str(task.name),
@@ -246,15 +285,21 @@ export function taskRowOf(value: unknown): TaskRow | null {
     createdAt: epoch(task.date_created) ?? 0,
     updatedAt: epoch(task.date_updated) ?? 0,
     // `text_content` rather than the markup: reformatting a description is not
-    // editing what it says.
-    description: capped(str(task.text_content ?? task.description)),
+    // editing what it says. Neither key at all is a reading without it.
+    description:
+      "text_content" in task || "description" in task
+        ? capped(str(body))
+        : null,
     assignees: peopleOf(task.assignees),
-    priority:
-      str((task.priority as { priority?: unknown } | null)?.priority) || null,
+    priority: priority || null,
     due: epoch(task.due_date),
     tags: Array.isArray(task.tags)
       ? task.tags
-          .map((tag) => str((tag as { name?: unknown } | null)?.name))
+          .map((tag) =>
+            typeof tag === "string"
+              ? tag
+              : str((tag as { name?: unknown } | null)?.name)
+          )
           .filter((name) => name !== "")
       : [],
     creator: personOf(task.creator),
@@ -366,11 +411,16 @@ export function mentionsIn(blocks: unknown): string[] {
 }
 
 /** A ClickUp user object as a `Person`, or null. Ids arrive as numbers. */
-function personOf(value: unknown): Person | null {
-  const raw = (value ?? {}) as { id?: unknown; username?: unknown }
+export function personOf(value: unknown): Person | null {
+  const raw = (value ?? {}) as {
+    id?: unknown
+    username?: unknown
+    name?: unknown
+    email?: unknown
+  }
   const id = typeof raw.id === "number" ? String(raw.id) : str(raw.id)
   if (!id) return null
-  return { id, name: str(raw.username) }
+  return { id, name: str(raw.username) || str(raw.name) || str(raw.email) }
 }
 
 function peopleOf(value: unknown): Person[] {
@@ -378,16 +428,19 @@ function peopleOf(value: unknown): Person[] {
   return value.flatMap((entry) => personOf(entry) ?? [])
 }
 
-function str(value: unknown): string {
+export function str(value: unknown): string {
   return typeof value === "string" ? value : ""
 }
 
-/** ClickUp sends timestamps as strings of ms; `Number("")` is 0, which would
- * be 1970 rather than none. */
-function epoch(value: unknown): number | null {
+/** ClickUp sends timestamps as strings of ms — or, through its MCP, possibly
+ * as ISO dates; `Number("")` is 0, which would be 1970 rather than none. */
+export function epoch(value: unknown): number | null {
   const raw =
     typeof value === "string" ? value : typeof value === "number" ? value : null
   if (raw === null || raw === "") return null
-  const ms = Number(raw)
+  const ms =
+    typeof raw === "string" && !/^\d+$/.test(raw)
+      ? Date.parse(raw)
+      : Number(raw)
   return Number.isFinite(ms) && ms > 0 ? ms : null
 }

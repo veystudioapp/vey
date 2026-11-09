@@ -3,15 +3,10 @@ import { createHash } from "node:crypto"
 import type { InboxItem, InboxSettings, ProjectInbox } from "../shared/api"
 import { inboxSettingsOf, readsComments, shows } from "../shared/inbox"
 import {
-  checkKey,
-  fetchComments,
-  fetchList,
-  fetchTasks,
   listRefIn,
-  resolveList,
   sameText,
+  type ClickupSource,
   type CommentRow,
-  type Fetch,
   type Person,
   type TaskRow,
 } from "./clickup"
@@ -23,7 +18,8 @@ import {
  *
  * The poll lives here rather than in the renderer because the point of an
  * inbox is that it filled while nobody was looking at it. Free of `electron`:
- * the key, `fetch` and the file are handed in, and `foldPoll` — the part that
+ * how ClickUp is read (`ClickupSource`) and the file are handed in, and
+ * `foldPoll` — the part that
  * can be wrong — is what `test/clickup-inbox.ts` checks.
  */
 
@@ -69,14 +65,17 @@ export type SeenTask = {
 
 function seenOf(
   task: TaskRow,
-  said: Record<string, string> | undefined
+  said: Record<string, string> | undefined,
+  /** The description last seen, kept when this reading has none. */
+  body?: string
 ): SeenTask {
+  const text = task.description ?? body
   return {
     status: task.status,
     statusColor: task.statusColor,
     name: task.name,
     url: task.url,
-    body: task.description,
+    ...(text !== undefined ? { body: text } : {}),
     assignees: Object.fromEntries(
       task.assignees.map((person) => [person.id, person.name])
     ),
@@ -99,7 +98,7 @@ const TICK_MS = 60 * 1000
 const FIRST_MS = 15 * 1000
 
 /** Comment reads per poll. A bulk edit moving 200 tasks would otherwise spend
- * twice the key's minute on one tick; the newest are read and the rest's
+ * the sign-in's minute on one tick; the newest are read and the rest's
  * comments are still found by date on the task's next change. */
 const MAX_COMMENT_READS = 40
 
@@ -189,7 +188,7 @@ export function baselineOf(
  * status, name, description, priority, due date, set of tags or of assignees
  * unlike `seen`'s changed; a comment dated after the old cursor was written
  * since the last poll, and one already read whose text no longer says the
- * same was edited. `me` — the key's own user id, null when unknown — turns an
+ * same was edited. `me` — the signed-in user's id, null when unknown — turns an
  * assignment into `assigned-me`, a comment into `mention`, and marks what is
  * theirs (`mine`, `byMe`) for the settings to filter on. Each item carries the
  * before and the after, so the inbox shows what changed rather than the task.
@@ -318,7 +317,11 @@ export function foldPoll(
           at: task.updatedAt,
         })
       }
-      if (was.body !== undefined && !sameText(was.body, task.description)) {
+      if (
+        was.body !== undefined &&
+        task.description !== null &&
+        !sameText(was.body, task.description)
+      ) {
         say({
           id: `description:${stamp}`,
           kind: "description",
@@ -373,7 +376,12 @@ export function foldPoll(
     readComments(read, stored, task.updatedAt)
     seen[task.id] = seenOf(
       task,
-      read ? saidOf(read) : typeof stored === "object" ? stored.said : undefined
+      read
+        ? saidOf(read)
+        : typeof stored === "object"
+          ? stored.said
+          : undefined,
+      was?.body
     )
     touch(task.id, task.updatedAt)
     cursor = Math.max(cursor, task.updatedAt)
@@ -472,19 +480,18 @@ export class ClickupInbox {
    * ClickUp the same question twice. */
   private polls: Promise<unknown> = Promise.resolve()
   /** When each inbox was last polled by the timer, by folder id — tried, not
-   * answered, so a failing key waits its interval like any other. In memory:
+   * answered, so a failing sign-in waits its interval like any other. In memory:
    * a launch polls everything once. */
   private tried = new Map<string, number>()
-  /** The key's own user id, asked once per key — `GET /user`. Null when it
+  /** The credential's own user id, asked once per credential. Null when it
    * could not be asked, so a poll goes on without the "you" kinds. */
-  private me: { token: string; id: Promise<string | null> } | null = null
+  private me: { key: string; id: Promise<string | null> } | null = null
 
   constructor(
     private readonly deps: {
-      /** The saved key, or empty — read per poll, so saving one needs no
-       * restart. */
-      token: () => Promise<string>
-      fetch: Fetch
+      /** How ClickUp is read now, or null before anybody signed in. Asked per
+       * poll, so signing in needs no restart. */
+      source: () => Promise<ClickupSource | null>
       read: () => Promise<InboxRecord[]>
       write: (records: InboxRecord[]) => Promise<void>
       /** The workspace's folder ids: an inbox whose project has left is kept
@@ -518,12 +525,13 @@ export class ClickupInbox {
         "That is not a ClickUp list. Copy the list's link from ClickUp, or its id."
       )
     }
-    const token = await this.deps.token()
-    const listId = await resolveList(this.deps.fetch, token, ref)
+    const source = await this.deps.source()
+    if (!source) throw new Error("Sign in to ClickUp first.")
+    const listId = await source.resolveList(ref)
     if (typeof listId !== "string") throw new Error(listId.error)
-    const list = await fetchList(this.deps.fetch, token, listId)
+    const list = await source.list(listId)
     if ("error" in list) throw new Error(list.error)
-    const tasks = await fetchTasks(this.deps.fetch, token, listId, null)
+    const tasks = await source.tasks(listId, null)
     if ("error" in tasks) throw new Error(tasks.error)
 
     const record = await this.update((records) => {
@@ -596,12 +604,12 @@ export class ClickupInbox {
     })
   }
 
-  private whoAmI(token: string): Promise<string | null> {
-    if (this.me?.token !== token) {
-      const id = checkKey(this.deps.fetch, token).then((answer) =>
-        "error" in answer ? null : answer.id
-      )
-      this.me = { token, id }
+  private whoAmI(source: ClickupSource): Promise<string | null> {
+    if (this.me?.key !== source.key) {
+      const id = source
+        .me()
+        .then((answer) => ("error" in answer ? null : answer.id))
+      this.me = { key: source.key, id }
       // A failed ask is asked again next poll rather than held.
       void id.then((answer) => {
         if (answer === null && this.me?.id === id) this.me = null
@@ -611,9 +619,9 @@ export class ClickupInbox {
   }
 
   private async pollNow(only?: string): Promise<void> {
-    const token = await this.deps.token()
-    if (!token) return
-    const me = await this.whoAmI(token)
+    const source = await this.deps.source()
+    if (!source) return
+    const me = await this.whoAmI(source)
     const present = new Set(await this.deps.folderIds())
     const now = Date.now()
     const targets = (await this.deps.read()).filter((entry) => {
@@ -624,16 +632,11 @@ export class ClickupInbox {
       return now - (this.tried.get(entry.folderId) ?? 0) >= every
     })
 
-    // One list after another rather than all at once: the key's rate limit is
+    // One list after another rather than all at once: the sign-in's rate limit is
     // shared by every inbox, and nobody is waiting on a tick.
     for (const target of targets) {
       this.tried.set(target.folderId, Date.now())
-      const tasks = await fetchTasks(
-        this.deps.fetch,
-        token,
-        target.list.id,
-        target.cursor
-      )
+      const tasks = await source.tasks(target.list.id, target.cursor)
       if ("error" in tasks) {
         await this.patch(target, (entry) =>
           entry.error === tasks.error ? entry : { ...entry, error: tasks.error }
@@ -649,7 +652,7 @@ export class ClickupInbox {
       for (const id of reading
         ? commentTargets(target, tasks, Date.now())
         : []) {
-        const answer = await fetchComments(this.deps.fetch, token, id)
+        const answer = await source.comments(id)
         if (!("error" in answer)) comments.set(id, answer)
       }
 

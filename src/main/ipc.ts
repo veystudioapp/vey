@@ -45,8 +45,16 @@ import { cookiesIn, MAX_COOKIE_FILE_BYTES, keptAs } from "./browser-cookies"
 import { cookieSites, cookieSources, sourceCookies } from "./browser-import"
 import { BrowserHub, browserServer } from "./browser-hub"
 import { Chats } from "./chat"
-import { checkKey } from "./clickup"
+import { checkKey, restSource } from "./clickup"
 import { ClickupInbox } from "./clickup-inbox"
+import {
+  CANCELLED,
+  ClickupMcp,
+  grantOf,
+  mcpSource,
+  signIn,
+  type McpGrant,
+} from "./clickup-mcp"
 import { findFavicon, MAX_FAVICON_BYTES } from "./favicon"
 import { serverUrl } from "./studio-server"
 import * as files from "./files"
@@ -120,9 +128,13 @@ import {
   worktreeDir,
 } from "./worktrees"
 
-/** The settings key the sealed ClickUp key is kept under. Not the deleted
- * watcher's `clickup.token`, which was sealed in another shape. */
+/** The settings key the sealed ClickUp personal key is kept under. Not the
+ * deleted watcher's `clickup.token`, which was sealed in another shape. */
 const CLICKUP_KEY = "clickup.inboxToken"
+/** The sign-in to ClickUp's MCP server (`main/clickup-mcp.ts`), sealed as
+ * JSON. One of it and `CLICKUP_KEY` at a time — saving either empties the
+ * other, so which one the inbox reads through is never a guess. */
+const CLICKUP_GRANT = "clickup.mcpGrant"
 
 /** What `imageDataUrl` recognises as a picture. */
 const IMAGE_MIME_TYPES: Record<string, string> = {
@@ -1836,16 +1848,42 @@ export function createIpc(host: Host): {
   })
 
   /*
-   * Each project's ClickUp inbox — `main/clickup-inbox.ts`. The key is one
-   * for the workspace, sealed like a custom API's and never handed back.
+   * Each project's ClickUp inbox — `main/clickup-inbox.ts`. The key, or the
+   * sign-in that stands for one, is one for the workspace, sealed like a
+   * custom API's and never handed back.
    */
   const clickupToken = async (): Promise<string> => {
     const sealed = await store.getSetting(CLICKUP_KEY)
     return (sealed && host.unseal(sealed)) || ""
   }
-  const inbox = new ClickupInbox({
-    token: clickupToken,
+  const clickupGrant = async (): Promise<McpGrant | null> => {
+    const sealed = await store.getSetting(CLICKUP_GRANT)
+    const json = (sealed && host.unseal(sealed)) || ""
+    if (!json) return null
+    try {
+      return grantOf(JSON.parse(json))
+    } catch {
+      return null
+    }
+  }
+  const saveGrant = (grant: McpGrant) =>
+    store.setSetting(CLICKUP_GRANT, host.seal(JSON.stringify(grant)))
+  const clickupMcp = new ClickupMcp({
     fetch: host.fetch,
+    grant: clickupGrant,
+    saveGrant,
+  })
+  const clickupSource = async () => {
+    const grant = await clickupGrant()
+    if (grant) return mcpSource(clickupMcp, `mcp:${grant.clientId}`)
+    const token = await clickupToken()
+    return token ? restSource(host.fetch, token) : null
+  }
+  /** One browser step at a time: a second click joins the first. */
+  let signingIn: Promise<void> | null = null
+  let cancelSignIn: AbortController | null = null
+  const inbox = new ClickupInbox({
+    source: clickupSource,
     read: () => store.readClickupInbox(),
     write: (records) => store.writeClickupInbox(records),
     folderIds: async () =>
@@ -1855,14 +1893,55 @@ export function createIpc(host: Host): {
   inbox.start()
 
   handle(IPC.inboxes, () => inbox.list())
-  handle(IPC.inboxHasKey, async () => (await clickupToken()) !== "")
+  handle(IPC.inboxAuth, async () =>
+    (await clickupGrant()) ? "clickup" : (await clickupToken()) ? "key" : "none"
+  )
   handle(IPC.inboxSetKey, async (_event, token: unknown) => {
     const key = typeof token === "string" ? token.trim() : ""
     if (!key) throw new Error("Paste a ClickUp personal key.")
     const checked = await checkKey(host.fetch, key)
     if ("error" in checked) throw new Error(checked.error)
+    cancelSignIn?.abort()
     await store.setSetting(CLICKUP_KEY, host.seal(key))
+    await store.setSetting(CLICKUP_GRANT, "")
+    clickupMcp.reset()
     void inbox.poll()
+  })
+  handle(IPC.inboxSignIn, () => {
+    if (!signingIn) {
+      const controller = new AbortController()
+      cancelSignIn = controller
+      signingIn = (async () => {
+        const grant = await signIn(
+          host.fetch,
+          (url) => host.openExternal(url),
+          controller.signal
+        )
+        // Cancelled while the code was being exchanged: nothing is kept.
+        if (controller.signal.aborted) throw new Error(CANCELLED)
+        await saveGrant(grant)
+        await store.setSetting(CLICKUP_KEY, "")
+        clickupMcp.reset()
+        void inbox.poll()
+      })().finally(() => {
+        signingIn = null
+        cancelSignIn = null
+      })
+    }
+    return signingIn
+  })
+  handle(IPC.inboxCancelSignIn, () => {
+    cancelSignIn?.abort()
+  })
+  // The key or the grant, whichever there is, forgotten here only: ClickUp
+  // publishes no revocation endpoint, so a grant lapses on its own and a key
+  // stays valid in ClickUp until it is regenerated there. The inboxes stay,
+  // unpolled, for the next sign-in.
+  handle(IPC.inboxSignOut, async () => {
+    cancelSignIn?.abort()
+    await store.setSetting(CLICKUP_GRANT, "")
+    await store.setSetting(CLICKUP_KEY, "")
+    clickupMcp.reset()
   })
   handle(IPC.inboxConnect, (_event, folderId: string, list: string) =>
     inbox.connect(String(folderId), String(list))

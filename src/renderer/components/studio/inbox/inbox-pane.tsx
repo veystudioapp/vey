@@ -16,7 +16,12 @@ import {
   Settings2,
 } from "lucide-react"
 
-import type { InboxItem, ProjectInbox, WorkspaceFolder } from "@shared/api"
+import type {
+  InboxAuth,
+  InboxItem,
+  ProjectInbox,
+  WorkspaceFolder,
+} from "@shared/api"
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -91,20 +96,16 @@ export function InboxPane() {
 
 function InboxView({ project }: { project: WorkspaceFolder }) {
   const inbox = useInbox((state) => state.byFolder[project.id])
-  const hasKey = useInbox((state) => state.hasKey)
+  const auth = useInbox((state) => state.auth)
   const editing = useInbox((state) => state.editing.includes(project.id))
 
-  if (hasKey === null) return null
-  if (!inbox || editing || !hasKey) {
+  if (auth === null) return null
+  if (!inbox || editing || auth === "none") {
     return (
-      <ConnectForm
-        folderId={project.id}
-        inbox={inbox ?? null}
-        needKey={!hasKey}
-      />
+      <ConnectForm folderId={project.id} inbox={inbox ?? null} auth={auth} />
     )
   }
-  return <Connected inbox={inbox} />
+  return <Connected inbox={inbox} auth={auth} />
 }
 
 /** Electron puts `Error invoking remote method '…':` ahead of main's sentence. */
@@ -116,26 +117,53 @@ function reasonOf(error: unknown): string {
 }
 
 /**
- * The key, once for every project, and the list this project follows. With a
- * key already saved its field stays folded behind `Use another key`.
+ * How ClickUp is read, once for every project — a sign-in to ClickUp's MCP
+ * server or a pasted personal key — and the list this project follows. With
+ * either already saved, choosing again stays folded behind `Change`.
  */
 function ConnectForm({
   folderId,
   inbox,
-  needKey,
+  auth,
 }: {
   folderId: string
   inbox: ProjectInbox | null
-  needKey: boolean
+  auth: InboxAuth
 }) {
   const t = useT()
   const [key, setKey] = useState("")
   const [list, setList] = useState(inbox?.list.id ?? "")
-  const [showKey, setShowKey] = useState(needKey)
+  const [changing, setChanging] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [signing, setSigning] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const askKey = needKey || showKey
-  const ready = list.trim() !== "" && (!askKey || key.trim() !== "")
+  const choosing = auth === "none" || changing
+  const ready = list.trim() !== "" && (auth !== "none" || key.trim() !== "")
+
+  /** Set by Cancel, so the rejection it causes is not shown as a failure. */
+  const cancelled = useRef(false)
+
+  async function signIn() {
+    if (signing) return
+    cancelled.current = false
+    setSigning(true)
+    setError(null)
+    try {
+      await window.desktop.inboxSignIn()
+      useInbox.getState().setAuth("clickup")
+      setChanging(false)
+      setKey("")
+    } catch (caught) {
+      if (!cancelled.current) setError(reasonOf(caught))
+    } finally {
+      setSigning(false)
+    }
+  }
+
+  function cancelSignIn() {
+    cancelled.current = true
+    void window.desktop.inboxCancelSignIn()
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -143,9 +171,11 @@ function ConnectForm({
     setBusy(true)
     setError(null)
     try {
-      if (askKey) {
+      if (choosing && key.trim() !== "") {
         await window.desktop.inboxSetKey(key)
-        useInbox.getState().setHasKey(true)
+        useInbox.getState().setAuth("key")
+        setChanging(false)
+        setKey("")
       }
       await window.desktop.inboxConnect(folderId, list)
       useInbox.getState().setEditing(folderId, false)
@@ -172,33 +202,84 @@ function ConnectForm({
           </p>
         </div>
 
-        {askKey ? (
-          <Field
-            id="inbox-key"
-            label={t("inbox.connect.key")}
-            hint={t("inbox.connect.keyHint")}
-          >
-            <Input
+        {choosing ? (
+          <>
+            <div className="flex flex-col gap-1.5">
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={signing}
+                  onClick={() => void signIn()}
+                  className="flex-1"
+                >
+                  {signing && <Spinner />}
+                  {signing
+                    ? t("inbox.connect.signingIn")
+                    : t("inbox.connect.signIn")}
+                </Button>
+                {signing && (
+                  <Button type="button" variant="ghost" onClick={cancelSignIn}>
+                    {t("inbox.connect.cancelSignIn")}
+                  </Button>
+                )}
+              </div>
+              <p className="text-[0.6875rem] leading-4 text-muted-foreground">
+                {t("inbox.connect.signInHint")}
+              </p>
+            </div>
+            <Field
               id="inbox-key"
-              type="password"
-              value={key}
-              onChange={(event) => setKey(event.target.value)}
-              placeholder="pk_…"
-              spellCheck={false}
-              autoComplete="off"
-              autoFocus
-              className="font-mono text-xs placeholder:font-sans"
-            />
-          </Field>
+              label={t("inbox.connect.orKey")}
+              hint={t("inbox.connect.keyHint")}
+            >
+              <Input
+                id="inbox-key"
+                type="password"
+                value={key}
+                onChange={(event) => setKey(event.target.value)}
+                placeholder="pk_…"
+                spellCheck={false}
+                autoComplete="off"
+                className="font-mono text-xs placeholder:font-sans"
+              />
+            </Field>
+            {auth !== "none" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setChanging(false)
+                  setKey("")
+                }}
+                className="self-start text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+              >
+                {auth === "clickup"
+                  ? t("inbox.connect.keepSignIn")
+                  : t("inbox.connect.keepKey")}
+              </button>
+            )}
+          </>
         ) : (
-          <p className="text-xs text-muted-foreground">
-            {t("inbox.connect.keySaved")}{" "}
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {auth === "clickup"
+              ? t("inbox.connect.signedIn")
+              : t("inbox.connect.keySaved")}
             <button
               type="button"
-              onClick={() => setShowKey(true)}
+              onClick={() => setChanging(true)}
               className="text-foreground underline-offset-2 hover:underline"
             >
-              {t("inbox.connect.changeKey")}
+              {t("inbox.connect.change")}
+            </button>
+            <span aria-hidden>·</span>
+            <button
+              type="button"
+              onClick={() => void useInbox.getState().signOut()}
+              className="text-foreground underline-offset-2 hover:underline"
+            >
+              {auth === "clickup"
+                ? t("inbox.connect.signOut")
+                : t("inbox.connect.forgetKey")}
             </button>
           </p>
         )}
@@ -215,7 +296,7 @@ function ConnectForm({
             placeholder="https://app.clickup.com/…/v/li/…"
             spellCheck={false}
             autoComplete="off"
-            autoFocus={!askKey}
+            autoFocus={!choosing}
             className="font-mono text-xs placeholder:font-sans"
           />
         </Field>
@@ -268,7 +349,7 @@ function Field({
   )
 }
 
-function Connected({ inbox }: { inbox: ProjectInbox }) {
+function Connected({ inbox, auth }: { inbox: ProjectInbox; auth: InboxAuth }) {
   const t = useT()
   const folderId = inbox.folderId
   const pickedId = useInbox((state) => state.picked[folderId] ?? null)
@@ -362,6 +443,13 @@ function Connected({ inbox }: { inbox: ProjectInbox }) {
               onClick={() => useInbox.getState().setEditing(folderId, true)}
             >
               {t("inbox.header.changeList")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => void useInbox.getState().signOut()}
+            >
+              {auth === "key"
+                ? t("inbox.header.forgetKey")
+                : t("inbox.header.signOut")}
             </DropdownMenuItem>
             <DropdownMenuItem
               variant="destructive"

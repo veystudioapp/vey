@@ -598,13 +598,18 @@ and nothing deletes them either.
 **A project has a ClickUp inbox** — the watcher it replaces stays deleted
 (watched tasks, agents on them; nothing reads `clickup-watches.json` or
 `clickup.token`). One list per project, polled on its own interval (its settings — kinds shown, minutes — in `shared/inbox.ts`) by
-`main/clickup-inbox.ts` (the API, read-only, in `main/clickup.ts`, `fetch`
-handed in as `Host.fetch`): a new task, a status, title or description
+`main/clickup-inbox.ts` (read-only — the REST API and the shapes in
+`main/clickup.ts`, the MCP in `main/clickup-mcp.ts`, `fetch` handed in as
+`Host.fetch`): a new task, a status, title or description
 changed, priority, due date, tags or assignees moved (an assignment to the
 key's own user its own kind), a comment written, mentioning that user or
 edited become items in `workspace/clickup-inbox.json`, with what the next poll diffs
-against (`seen`, `cursor`) kept in main. The key is one, sealed under
-`clickup.inboxToken`, never sent back. The `Inbox` button beside `+ Chat`
+against (`seen`, `cursor`) kept in main. ClickUp is read one of two ways
+(`ClickupSource`): a **sign-in to ClickUp's own MCP server** (OAuth with PKCE
+on a loopback port, the tools called over Streamable HTTP by hand), sealed
+under `clickup.mcpGrant`, or a personal key on the REST API (`restSource`),
+sealed under `clickup.inboxToken`; saving one empties the other, neither is
+sent back. Not the user's `claude` connector, whose grant is claude.ai's. The `Inbox` button beside `+ Chat`
 carries the unread count and opens the project's `inbox` tab
 (`components/studio/inbox/inbox-pane.tsx`, `lib/inbox/store.ts`; one per
 project, its `rootOf` following the project's worktrees). No notification, no

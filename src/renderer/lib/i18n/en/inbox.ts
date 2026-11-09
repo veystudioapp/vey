@@ -11,11 +11,21 @@ export const inbox = {
     title: "Connect a ClickUp list",
     detail:
       "This project's inbox follows one ClickUp list: new tasks, changes to a status, title or description, and comments new or edited. Nothing is written back to ClickUp.",
-    key: "ClickUp personal key",
+    signIn: "Sign in with ClickUp",
+    signingIn: "Finish signing in in your browser…",
+    signInHint:
+      "Opens ClickUp's consent page in your browser. Read access only, for every project.",
+    cancelSignIn: "Cancel",
+    signOut: "Sign out",
+    signedIn: "Signed in to ClickUp.",
+    keySaved: "A personal key is saved.",
+    change: "Change",
+    forgetKey: "Remove key",
+    keepSignIn: "Keep the ClickUp sign-in",
+    keepKey: "Keep the saved key",
+    orKey: "Or a ClickUp personal key",
     keyHint:
       "ClickUp › Settings › Apps › API Token. Kept in the system keychain, for every project.",
-    keySaved: "A key is saved.",
-    changeKey: "Use another key",
     list: "List link or id",
     listHint:
       "The address of the list in ClickUp — any of its views — or its id.",
@@ -31,6 +41,8 @@ export const inbox = {
     more: "Inbox",
     settings: "Inbox settings",
     changeList: "Follow another list…",
+    signOut: "Sign out of ClickUp",
+    forgetKey: "Remove the ClickUp key",
     disconnect: "Disconnect",
   },
   settings: {

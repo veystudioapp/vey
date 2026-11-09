@@ -12,11 +12,21 @@ export const inbox: Messages["inbox"] = {
     title: "Kết nối một list ClickUp",
     detail:
       "Inbox của dự án theo dõi một list ClickUp: task mới, thay đổi trạng thái, tiêu đề hay mô tả, và comment mới hoặc được sửa. Không ghi gì ngược lên ClickUp.",
-    key: "Personal key của ClickUp",
+    signIn: "Đăng nhập bằng ClickUp",
+    signingIn: "Hoàn tất đăng nhập trên trình duyệt…",
+    signInHint:
+      "Mở trang đồng ý của ClickUp trên trình duyệt. Chỉ xin quyền đọc, dùng chung cho mọi dự án.",
+    cancelSignIn: "Huỷ",
+    signOut: "Đăng xuất",
+    signedIn: "Đã đăng nhập ClickUp.",
+    keySaved: "Đã lưu một personal key.",
+    change: "Đổi",
+    forgetKey: "Xoá key",
+    keepSignIn: "Giữ đăng nhập ClickUp hiện tại",
+    keepKey: "Giữ key đã lưu",
+    orKey: "Hoặc personal key của ClickUp",
     keyHint:
       "ClickUp › Settings › Apps › API Token. Lưu trong keychain của hệ thống, dùng chung cho mọi dự án.",
-    keySaved: "Đã lưu một key.",
-    changeKey: "Dùng key khác",
     list: "Link hoặc id của list",
     listHint:
       "Địa chỉ của list trong ClickUp — view nào của nó cũng được — hoặc id của list.",
@@ -32,6 +42,8 @@ export const inbox: Messages["inbox"] = {
     more: "Inbox",
     settings: "Cài đặt inbox",
     changeList: "Theo dõi list khác…",
+    signOut: "Đăng xuất ClickUp",
+    forgetKey: "Xoá key ClickUp",
     disconnect: "Ngắt kết nối",
   },
   settings: {

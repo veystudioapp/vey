@@ -3127,12 +3127,22 @@ export type DesktopApi = {
 
   /** Every project's ClickUp inbox — `main/clickup-inbox.ts`. */
   inboxes: () => Promise<ProjectInbox[]>
-  /** Whether a ClickUp key is saved and still opens. The key itself never
-   * comes back to the renderer. */
-  inboxHasKey: () => Promise<boolean>
-  /** Checks a personal key against ClickUp and seals it; throws with
-   * ClickUp's reason when refused. */
+  /** How the inbox reads ClickUp now. Neither the key nor the sign-in's
+   * tokens ever come back to the renderer. */
+  inboxAuth: () => Promise<InboxAuth>
+  /** Checks a personal key against ClickUp and seals it, replacing a
+   * sign-in; throws with ClickUp's reason when refused. */
   inboxSetKey: (token: string) => Promise<void>
+  /** Signs in to ClickUp's own MCP server in the browser (OAuth) and seals
+   * the grant, replacing a key or a sign-in before it. Resolves once the
+   * browser step is done; throws with the reason. */
+  inboxSignIn: () => Promise<void>
+  /** Gives up on a sign-in waiting for the browser; its `inboxSignIn`
+   * rejects with `CANCELLED`'s sentence. Nothing when none is running. */
+  inboxCancelSignIn: () => Promise<void>
+  /** Forgets the key or the sign-in, for every project. The inboxes are kept
+   * and are polled again once there is one. */
+  inboxSignOut: () => Promise<void>
   /** Points a project's inbox at a list, by URL or id. Reads the whole list
    * once so nothing already there is announced; throws with the reason. */
   inboxConnect: (folderId: string, list: string) => Promise<ProjectInbox>
@@ -3297,6 +3307,10 @@ export type InboxSettings = {
   hideOwn: boolean
 }
 
+/** How the inbox reads ClickUp: a pasted personal key, a sign-in to
+ * ClickUp's MCP server, or neither yet. */
+export type InboxAuth = "key" | "clickup" | "none"
+
 /** A project's inbox: the ClickUp list it follows and what has come of it. */
 export type ProjectInbox = {
   folderId: string
@@ -3449,8 +3463,11 @@ export const IPC = {
   installPlugin: "plugins:install",
   removePlugin: "plugins:remove",
   inboxes: "inbox:list",
-  inboxHasKey: "inbox:has-key",
+  inboxAuth: "inbox:auth",
   inboxSetKey: "inbox:set-key",
+  inboxSignIn: "inbox:sign-in",
+  inboxCancelSignIn: "inbox:cancel-sign-in",
+  inboxSignOut: "inbox:sign-out",
   inboxConnect: "inbox:connect",
   inboxDisconnect: "inbox:disconnect",
   inboxMarkRead: "inbox:mark-read",

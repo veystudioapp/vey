@@ -702,8 +702,7 @@ check(
 
 let stored: InboxRecord[] = [mixed]
 const inbox = new ClickupInbox({
-  token: async () => "",
-  fetch: async () => new Response("{}"),
+  source: async () => null,
   read: async () => stored,
   write: async (records) => {
     stored = records
