@@ -4,7 +4,14 @@ import { join } from "node:path"
 import { defineConfig, type HeadConfig } from "vitepress"
 
 import { MARK_ICON_URL } from "./theme/brand.ts"
-import { COPY, installPathOf, LANGS, pathOf, type Lang } from "./theme/copy.ts"
+import {
+  COPY,
+  installPathOf,
+  LANGS,
+  pathOf,
+  pluginsPathOf,
+  type Lang,
+} from "./theme/copy.ts"
 import { REPO_URL } from "./theme/links.ts"
 
 /*
@@ -137,6 +144,42 @@ function installHead(lang: Lang): HeadConfig[] {
   ]
 }
 
+/** The marketplace page's head: its canonical and its other language. */
+function pluginsHead(lang: Lang): HeadConfig[] {
+  const t = COPY[lang].plugins
+  return [
+    ...(SITE_URL
+      ? [
+          [
+            "link",
+            { rel: "canonical", href: absoluteOf(pluginsPathOf(lang)) },
+          ] as HeadConfig,
+        ]
+      : []),
+    ["meta", { property: "og:title", content: t.title }],
+    ["meta", { property: "og:description", content: t.description }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:locale", content: OG_LOCALE[lang] }],
+    ...LANGS.map((l): HeadConfig => [
+      "link",
+      {
+        rel: "alternate",
+        hreflang: COPY[l].htmlLang,
+        href: absoluteOf(pluginsPathOf(l)),
+      },
+    ]),
+  ]
+}
+
+/** Which language's marketplace page a page is, if it is one. */
+function pluginsOf(relativePath: string): Lang | null {
+  return (
+    LANGS.find(
+      (lang) => `${pluginsPathOf(lang).slice(1)}.md` === relativePath
+    ) ?? null
+  )
+}
+
 /** Which language's install page a page is, if it is one. */
 function installOf(relativePath: string): Lang | null {
   return (
@@ -195,6 +238,15 @@ export default defineConfig({
   // The home page's title, description and alternates are its copy's, so
   // they cannot drift from the words on it.
   transformPageData(pageData) {
+    const plugins = pluginsOf(pageData.relativePath)
+    if (plugins) {
+      const t = COPY[plugins].plugins
+      pageData.title = t.title
+      pageData.description = t.description
+      pageData.titleTemplate = false
+      pageData.frontmatter.head = pluginsHead(plugins)
+      return
+    }
     const install = installOf(pageData.relativePath)
     if (install) {
       const t = COPY[install].install
@@ -230,6 +282,11 @@ export default defineConfig({
       lines.join("\n") + "\n"
     )
   },
+
+  // The marketplace page reads the repository's `plugins/` and
+  // `marketplace/`, and the app's search rule in `src/shared/`, which are
+  // outside this package — Vite's dev server refuses them otherwise.
+  vite: { server: { fs: { allow: [".."] } } },
 
   themeConfig: {
     logo: "/mark.svg",

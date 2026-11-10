@@ -103,6 +103,7 @@ import {
   readPluginZip,
   type PluginFiles,
 } from "./plugin-install"
+import { Marketplace } from "./marketplace"
 import {
   listAllPlugins,
   pluginFilePath,
@@ -1910,14 +1911,31 @@ export function createIpc(host: Host): {
     writePluginData(pluginDataDir, id, data)
   )
 
+  // The catalog and its downloads — `main/marketplace.ts`.
+  const marketplace = new Marketplace({
+    fetch: host.fetch,
+    url: process.env.VEYSTUDIO_MARKETPLACE_URL || undefined,
+  })
+
+  handle(IPC.marketplacePlugins, (_event, refresh?: boolean) =>
+    marketplace.catalog(refresh === true)
+  )
+
   /*
-   * Installing is a picker and a copy — see `main/plugin-install.ts`. Two
-   * sources rather than one picker taking both, because only macOS lets one
-   * dialog choose a folder *or* a file.
+   * Installing is a picker and a copy — see `main/plugin-install.ts` — or a
+   * download of the marketplace's entry by id. Two pickers rather than one
+   * taking both, because only macOS lets one dialog choose a folder *or* a
+   * file.
    */
   handle(IPC.installPlugin, async (_event, source: PluginSource) => {
     let files: PluginFiles
-    if (source === "folder") {
+    if (
+      typeof source === "object" &&
+      source !== null &&
+      typeof source.marketplace === "string"
+    ) {
+      files = await marketplace.download(source.marketplace)
+    } else if (source === "folder") {
       const dir = await host.pickDirectory({
         title: "Install a plugin from a folder",
         buttonLabel: "Install",

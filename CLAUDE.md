@@ -309,8 +309,13 @@ learnings…`, its dialog, `main/learnings.ts`, `shared/learnings.ts` and the
   into `dist-plugins/`, an `extraResources` entry; on until switched off) and
   the user's `workspace/plugins/<id>/` (off until switched on), filled by
   **installing** from a folder or a `.zip` (`plugin-install.ts` — copies the
-  served files under the manifest's id; the same id again updates; the
-  marketplace will call the same `installPlugin`). Listing manifests, `workspace/plugin-data/<id>.json`, and the path the
+  served files under the manifest's id; the same id again updates), or from
+  the **marketplace** (`marketplace.ts`): a catalog in this repository,
+  `marketplace/plugins.json`, searched in the Plugins view's `Marketplace`
+  tab, each entry's zip downloaded by main, refused unless its SHA-256 and
+  manifest id are the entry's, then the same `installPlugin`. The renderer
+  sends an id, never a URL. The site's `/plugins` only shows the list
+  (`docs/design.md` § The plugin marketplace, `test/marketplace.ts`). Listing manifests, `workspace/plugin-data/<id>.json`, and the path the
   `vsc-plugin://` handler in `protocol.ts` serves — `main.js`, `styles.css`
   and the icon the manifest's `icon` names (any path inside the folder, `svg`
   / `png` / `jpg` / `webp` / `gif`, `pluginIconPathOf`), served as `icon` so

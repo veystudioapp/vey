@@ -7,6 +7,7 @@
  */
 
 import type { EslintResult } from "./eslint"
+import type { MarketplacePlugin } from "./marketplace"
 import type { PluginInfo, PluginInstall, PluginSource } from "./plugins"
 import type {
   BrowserActivity,
@@ -3191,14 +3192,18 @@ export type DesktopApi = {
   /** A plugin's `data.json`, replaced. Capped at 1 MB. */
   writePluginData: (id: string, data: unknown) => Promise<void>
   /**
-   * Asks for a plugin's folder or `.zip` and installs it into
-   * `workspace/plugins/` — or updates it, when that id is already there. Null
-   * when the picker was cancelled; a refusal (no manifest, a built-in plugin's
-   * id) throws with the reason.
+   * Installs a plugin into `workspace/plugins/` — from a folder or `.zip` the
+   * user picks, or the marketplace's entry of that id, downloaded — or updates
+   * it, when that id is already there. Null when the picker was cancelled; a
+   * refusal (no manifest, a built-in plugin's id, a checksum that does not
+   * match) throws with the reason.
    */
   installPlugin: (source: PluginSource) => Promise<PluginInstall | null>
   /** Moves an installed plugin to the trash. A built-in one is refused. */
   removePlugin: (id: string) => Promise<void>
+  /** The plugin marketplace's catalog (`main/marketplace.ts`), held ten
+   * minutes unless `refresh`. Throws when it cannot be read. */
+  marketplacePlugins: (refresh?: boolean) => Promise<MarketplacePlugin[]>
 
   /** Every project's ClickUp inbox — `main/clickup-inbox.ts`. */
   inboxes: () => Promise<ProjectInbox[]>
@@ -3545,6 +3550,7 @@ export const IPC = {
   writePluginData: "plugins:write-data",
   installPlugin: "plugins:install",
   removePlugin: "plugins:remove",
+  marketplacePlugins: "plugins:marketplace",
   inboxes: "inbox:list",
   inboxAuth: "inbox:auth",
   inboxSetKey: "inbox:set-key",

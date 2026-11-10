@@ -11,9 +11,13 @@ const { frontmatter } = useData()
 /** `index.md` and `vi/index.md`: the home page, drawn by `Home.vue` alone. */
 const isHome = computed(() => frontmatter.value.layout === "home-page")
 /** A page drawn by its own component rather than the guide's layout: the
- * home page, or the install page (`Install.vue`). */
+ * home page, the install page (`Install.vue`) or the plugin marketplace
+ * (`Plugins.vue`). */
 const isOwn = computed(
-  () => isHome.value || frontmatter.value.layout === "install-page"
+  () =>
+    isHome.value ||
+    frontmatter.value.layout === "install-page" ||
+    frontmatter.value.layout === "plugins-page"
 )
 
 // Clear over the haze at the top; a surface only once there is text

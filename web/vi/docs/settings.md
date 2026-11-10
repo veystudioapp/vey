@@ -42,6 +42,15 @@ Plugin bổ sung tính năng cho Vey. Có sẵn hai plugin, đều đang bật:
 
 Tắt plugin ở đây nếu bạn không dùng.
 
+### Cài plugin
+
+Mục Plugin có một ô tìm kiếm và hai tab. **Đã cài** liệt kê những gì bạn có;
+**Marketplace** liệt kê các plugin bạn có thể thêm (cũng xem được ở
+[/vi/plugins](/vi/plugins)). Bấm **Cài** ở một plugin: Vey tải nó về, đối chiếu
+với checksum của marketplace, rồi thêm vào **Đã cài** ở trạng thái tắt. Bật nó
+ở đó khi bạn đã quyết định chạy. Khi marketplace có bản mới hơn, nút sẽ là
+**Cập nhật**.
+
 ::: warning
 Plugin chạy bên trong studio với đúng quyền của studio — file, terminal và chat
 của bạn. Chỉ bật plugin bạn tin tưởng.

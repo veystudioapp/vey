@@ -67,6 +67,11 @@ export function installPathOf(lang: Lang): string {
   return `${pathOf(lang)}install`
 }
 
+/** Where a language's plugin marketplace lives (`plugins.md`, `Plugins.vue`). */
+export function pluginsPathOf(lang: Lang): string {
+  return `${pathOf(lang)}plugins`
+}
+
 type Section = {
   kicker: string
   title: string
@@ -94,6 +99,8 @@ export type Copy = {
     faq: string
     /** The user's guide, `docsPathOf`. */
     docs: string
+    /** The plugin marketplace, `pluginsPathOf`. */
+    plugins: string
     download: string
     language: string
     /** The bar's link to the repository. */
@@ -143,6 +150,33 @@ export type Copy = {
   }
   /** The install page (`install/Install.vue`). */
   install: InstallCopy
+  /** The plugin marketplace (`plugins/Plugins.vue`). */
+  plugins: PluginsCopy
+}
+
+type PluginsCopy = {
+  title: string
+  description: string
+  eyebrow: string
+  h1: [plain: string, accent: string]
+  lede: string
+  search: string
+  /** "3 plugins" — the count under the search box. */
+  count: (n: number) => string
+  noMatch: string
+  builtin: string
+  /** A built-in plugin's line in place of a version: it comes with the app. */
+  builtinNote: string
+  community: string
+  communityEmpty: string
+  by: (author: string) => string
+  source: string
+  how: {
+    kicker: string
+    title: string
+    items: { title: string; body: string }[]
+  }
+  submit: { title: string; body: string; link: string }
 }
 
 type InstallCopy = {
@@ -195,6 +229,7 @@ const en: Copy = {
     features: "Features",
     faq: "FAQ",
     docs: "Docs",
+    plugins: "Plugins",
     download: "Download",
     language: "Language",
     github: "GitHub",
@@ -439,6 +474,47 @@ const en: Copy = {
       },
     },
   },
+  plugins: {
+    title: "Plugins for Vey",
+    description:
+      "Browse the plugins for Vey, the agent-first desktop studio for Claude Code — the ones built in and the ones the community writes.",
+    eyebrow: "Plugin marketplace",
+    h1: ["Plugins for", "Vey."],
+    lede: "What the app can be taught to do beyond what it ships with. This page is for looking: installing happens inside Vey, under Plugins › Marketplace.",
+    search: "Search plugins",
+    count: (n) => (n === 1 ? "1 plugin" : `${n} plugins`),
+    noMatch: "No plugin matches that.",
+    builtin: "Built in",
+    builtinNote: "Comes with Vey, on unless you switch it off.",
+    community: "Community",
+    communityEmpty:
+      "No community plugins yet. Yours could be the first — see below.",
+    by: (author) => `by ${author}`,
+    source: "Source",
+    how: {
+      kicker: "Installing",
+      title: "Install from inside the app",
+      items: [
+        {
+          title: "Open Plugins",
+          body: "Click the puzzle piece in the rail on the left of the window.",
+        },
+        {
+          title: "Search the Marketplace",
+          body: "Switch to the Marketplace tab, search, and press Install. Vey downloads the plugin and checks it against the marketplace's checksum.",
+        },
+        {
+          title: "Switch it on",
+          body: "A new plugin arrives off. Turn it on in the Installed tab once you've decided to run it — a plugin has the whole of the app's access.",
+        },
+      ],
+    },
+    submit: {
+      title: "List your plugin",
+      body: "The marketplace is one file in the repository. Open a pull request adding your plugin's entry — its zip's URL and checksum — to marketplace/plugins.json.",
+      link: "How to list a plugin",
+    },
+  },
 }
 
 const vi: Copy = {
@@ -454,6 +530,7 @@ const vi: Copy = {
     features: "Tính năng",
     faq: "Hỏi đáp",
     docs: "Hướng dẫn",
+    plugins: "Plugin",
     download: "Tải về",
     language: "Ngôn ngữ",
     github: "GitHub",
@@ -696,6 +773,47 @@ const vi: Copy = {
         title: "Gặp trục trặc?",
         body: "Không tìm thấy claude, tài khoản không đăng nhập được, chat có vẻ bị treo: cách xử lý có trong hướng dẫn.",
       },
+    },
+  },
+  plugins: {
+    title: "Plugin cho Vey",
+    description:
+      "Xem các plugin cho Vey, studio desktop agent-first cho Claude Code — plugin có sẵn và plugin do cộng đồng viết.",
+    eyebrow: "Marketplace plugin",
+    h1: ["Plugin cho", "Vey."],
+    lede: "Những gì app có thể làm thêm ngoài phần có sẵn. Trang này để xem: việc cài đặt diễn ra ngay trong Vey, ở Plugin › Marketplace.",
+    search: "Tìm plugin",
+    count: (n) => `${n} plugin`,
+    noMatch: "Không có plugin nào khớp.",
+    builtin: "Có sẵn",
+    builtinNote: "Đi kèm Vey, luôn bật trừ khi bạn tắt nó.",
+    community: "Cộng đồng",
+    communityEmpty:
+      "Chưa có plugin cộng đồng nào. Plugin của bạn có thể là cái đầu tiên — xem bên dưới.",
+    by: (author) => `của ${author}`,
+    source: "Mã nguồn",
+    how: {
+      kicker: "Cài đặt",
+      title: "Cài ngay trong app",
+      items: [
+        {
+          title: "Mở Plugin",
+          body: "Bấm biểu tượng mảnh ghép ở thanh bên trái cửa sổ.",
+        },
+        {
+          title: "Tìm trong Marketplace",
+          body: "Chuyển sang tab Marketplace, tìm và bấm Cài. Vey tải plugin về và đối chiếu với checksum của marketplace.",
+        },
+        {
+          title: "Bật nó lên",
+          body: "Plugin mới cài sẽ ở trạng thái tắt. Bật nó trong tab Đã cài khi bạn đã quyết định chạy — plugin có toàn bộ quyền của app.",
+        },
+      ],
+    },
+    submit: {
+      title: "Đưa plugin của bạn lên",
+      body: "Marketplace là một file trong repository. Mở pull request thêm mục của plugin — URL file zip và checksum — vào marketplace/plugins.json.",
+      link: "Cách đưa plugin lên",
     },
   },
 }

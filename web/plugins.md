@@ -1,0 +1,5 @@
+---
+layout: plugins-page
+---
+
+<Plugins />

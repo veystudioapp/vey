@@ -274,6 +274,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke(IPC.writePluginData, id, data),
   installPlugin: (source) => ipcRenderer.invoke(IPC.installPlugin, source),
   removePlugin: (id) => ipcRenderer.invoke(IPC.removePlugin, id),
+  marketplacePlugins: (refresh) =>
+    ipcRenderer.invoke(IPC.marketplacePlugins, refresh),
 
   inboxes: () => ipcRenderer.invoke(IPC.inboxes),
   inboxAuth: () => ipcRenderer.invoke(IPC.inboxAuth),
