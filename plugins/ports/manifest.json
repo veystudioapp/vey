@@ -1,0 +1,8 @@
+{
+  "id": "ports",
+  "name": "Ports",
+  "version": "1.0.0",
+  "description": "The TCP ports in use on this machine, and a Stop for whatever holds one.",
+  "author": "Vey",
+  "icon": "icon.svg"
+}

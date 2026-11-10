@@ -11,7 +11,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Spinner } from "@/components/ui/spinner"
-import { useT } from "@/lib/i18n"
+import type { Translate } from "@/lib/i18n"
+import type { PluginApp } from "@/lib/plugins/app"
 import { cn } from "@/lib/utils"
 
 /** How long a SIGTERM is given before the list is read again: long enough
@@ -28,9 +29,19 @@ const SETTLE_MS = 700
  * wrong row gets stopped. Stop is a SIGTERM; a process still listening after
  * it is offered Force quit, which is the SIGKILL nobody should reach for
  * first.
+ *
+ * The words are the app's (`nav.ports.*`) through `app.t`, handed in: a plugin
+ * bundling `lib/i18n` would carry a second copy of every message.
  */
-export function PortsDialog({ onClose }: { onClose: () => void }) {
-  const t = useT()
+export function PortsDialog({
+  t,
+  ports: api,
+  onClose,
+}: {
+  t: Translate
+  ports: PluginApp["ports"]
+  onClose: () => void
+}) {
   const [ports, setPorts] = useState<ListeningPort[] | null>(null)
   // True from the start: the dialog opens on a read already under way.
   const [loading, setLoading] = useState(true)
@@ -55,20 +66,20 @@ export function PortsDialog({ onClose }: { onClose: () => void }) {
   // The opening read, answered in callbacks: an unmounted dialog takes none.
   useEffect(() => {
     let alive = true
-    void window.desktop.listPorts().then(
+    void api.list().then(
       (listed) => alive && settle(listed),
       (failure: unknown) => alive && settle(null, failure)
     )
     return () => {
       alive = false
     }
-  }, [settle])
+  }, [api, settle])
 
   /** A Refresh, and the re-read after a Stop. */
   async function load() {
     setLoading(true)
     try {
-      return settle(await window.desktop.listPorts())
+      return settle(await api.list())
     } catch (failure) {
       return settle(null, failure)
     }
@@ -78,7 +89,7 @@ export function PortsDialog({ onClose }: { onClose: () => void }) {
     setStopping(pid)
     setError(null)
     try {
-      await window.desktop.stopPortProcess(pid, force)
+      await api.stop(pid, force)
       await new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
       const listed = await load()
       const alive = listed?.some((entry) => entry.pid === pid) ?? false
@@ -167,6 +178,7 @@ export function PortsDialog({ onClose }: { onClose: () => void }) {
               {shown.map((entry) => (
                 <PortRow
                   key={`${entry.pid}:${entry.port}`}
+                  t={t}
                   entry={entry}
                   stopping={stopping === entry.pid}
                   busy={stopping !== null}
@@ -183,19 +195,20 @@ export function PortsDialog({ onClose }: { onClose: () => void }) {
 }
 
 function PortRow({
+  t,
   entry,
   stopping,
   busy,
   stubborn,
   onStop,
 }: {
+  t: Translate
   entry: ListeningPort
   stopping: boolean
   busy: boolean
   stubborn: boolean
   onStop: (force: boolean) => void
 }) {
-  const t = useT()
   return (
     <li className="flex items-center gap-3 px-3 py-2">
       <span className="w-14 shrink-0 font-mono text-sm font-medium tabular-nums">

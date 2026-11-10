@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 import { IconButton } from "./icon-button"
 import { OfficialBadge } from "./official-badge"
 import { PanelHeader } from "./panel-header"
+import { PluginIcon } from "./plugin-icon"
 
 /**
  * Off for now: the install buttons are hidden rather than deleted, so the
@@ -142,6 +143,7 @@ export function PluginsSection() {
               return (
                 <li key={plugin.id} className="group space-y-1 px-3 py-2.5">
                   <div className="flex items-center gap-2">
+                    <PluginIcon plugin={plugin} />
                     <span className="flex min-w-0 flex-1 items-center gap-1.5">
                       <span className="truncate text-sm font-medium">
                         {plugin.manifest?.name ?? plugin.id}
@@ -197,9 +199,11 @@ export function PluginsSection() {
                       }
                     />
                   </div>
+                  {/* Under the name rather than under the icon: `pl-6` is the
+                      icon's 16px and the row's gap. */}
                   <p
                     className={cn(
-                      "text-xs leading-relaxed",
+                      "pl-6 text-xs leading-relaxed",
                       problem ? "text-destructive" : "text-muted-foreground"
                     )}
                   >

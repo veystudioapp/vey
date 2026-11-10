@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readdir, rm, stat } from "node:fs/promises"
+import { copyFile, mkdir, readdir, readFile, rm, stat } from "node:fs/promises"
 import path from "node:path"
 import { parseArgs } from "node:util"
 
@@ -134,6 +134,16 @@ await Promise.all(
     )
     if (await exists(path.join(dir, "styles.css"))) {
       await copyFile(path.join(dir, "styles.css"), path.join(out, "styles.css"))
+    }
+    // Wherever the manifest says it is, and to the same place: the path is
+    // the manifest's, and main reads the copied manifest to serve it.
+    const { icon } = JSON.parse(
+      await readFile(path.join(dir, "manifest.json"), "utf8")
+    )
+    if (typeof icon === "string") {
+      const target = path.join(out, icon)
+      await mkdir(path.dirname(target), { recursive: true })
+      await copyFile(path.join(dir, icon), target)
     }
   })
 )

@@ -200,4 +200,26 @@ section("rail buttons")
   check("taken back on unload", registry.railButtonList().length === 0)
 }
 
+section("status bar items")
+{
+  const registry = new PluginRegistry()
+  const run = () => {}
+  registry.addStatusBarItem("ports", {
+    id: "open",
+    label: "Ports",
+    title: "See which ports are in use",
+    icon: "network",
+    run,
+  })
+  registry.addStatusBarItem("ports", { id: "bare", label: "Bare", run })
+  const items = registry.statusBarItemList()
+  check("namespaced", items[0]?.id === "ports:open")
+  check("its icon", items[0]?.icon === "network")
+  check("its title", items[0]?.title === "See which ports are in use")
+  check("no title is the label", items[1]?.title === "Bare")
+  check("no icon is the default", items[1]?.icon === "puzzle")
+  await registry.unload("ports")
+  check("taken back on unload", registry.statusBarItemList().length === 0)
+}
+
 finish()

@@ -3,7 +3,11 @@ import path from "node:path"
 
 import { unzipSync } from "fflate"
 
-import { isPluginId, type PluginInstall } from "../shared/plugins"
+import {
+  isPluginId,
+  pluginIconPathOf,
+  type PluginInstall,
+} from "../shared/plugins"
 import { parseManifest, type PluginRoots } from "./plugins"
 
 /**
@@ -11,12 +15,13 @@ import { parseManifest, type PluginRoots } from "./plugins"
  * folder or a `.zip` today, and from the marketplace when there is one, which
  * will download and hand its bytes to the same `installPlugin`.
  *
- * An install **copies three files and nothing else**: `manifest.json`,
- * `main.js` and `styles.css`, the ones `pluginFileOf` serves. A plugin's
+ * An install **copies four files and nothing else**: `manifest.json`,
+ * `main.js`, `styles.css` and the icon the manifest names, the ones
+ * `pluginFileOf` serves. A plugin's
  * folder is usually its repository — `src/`, `node_modules/`, a `.git` — and
  * none of that is read by the app, so none of it is carried in. It is also what
  * keeps a zip from writing anywhere: no path inside an archive becomes a path
- * on disk, only those three names under a directory this module chose.
+ * on disk, only those names under a directory this module chose.
  *
  * Free of `electron` (`test/plugins.ts`); the pickers are `host`'s.
  */
@@ -27,6 +32,8 @@ const LIMITS = {
   "manifest.json": 64 * 1024,
   "main.js": 10 * 1024 * 1024,
   "styles.css": 2 * 1024 * 1024,
+  // A mark drawn at 16px; anything this size is a photograph, not an icon.
+  icon: 1024 * 1024,
 } as const
 
 type InstallFile = keyof typeof LIMITS
@@ -36,19 +43,35 @@ export type PluginFiles = {
   manifest: string
   main: Uint8Array
   styles: Uint8Array | null
+  /** At the path the manifest names, `/`-separated. */
+  icon: { path: string; bytes: Uint8Array } | null
+}
+
+/** The icon path a manifest's text names, or null — for none, and for one
+ * `parseManifest` will refuse when the install reads the manifest properly. */
+function iconPathIn(manifest: string): string | null {
+  try {
+    const raw: unknown = JSON.parse(manifest)
+    return pluginIconPathOf((raw as { icon?: unknown } | null)?.icon)
+  } catch {
+    return null
+  }
 }
 
 /** The files from a folder on disk — the one a plugin was built into. */
 export async function readPluginFolder(dir: string): Promise<PluginFiles> {
-  const read = async (name: InstallFile): Promise<Uint8Array | null> => {
-    const file = path.join(dir, name)
+  const read = async (
+    name: InstallFile,
+    relative: string = name
+  ): Promise<Uint8Array | null> => {
+    const file = path.join(dir, ...relative.split("/"))
     let size: number
     try {
       size = (await stat(file)).size
     } catch {
       return null
     }
-    if (size > LIMITS[name]) throw new Error(`${name} is too large.`)
+    if (size > LIMITS[name]) throw new Error(`${relative} is too large.`)
     return readFile(file)
   }
 
@@ -56,10 +79,14 @@ export async function readPluginFolder(dir: string): Promise<PluginFiles> {
   if (!manifest) throw new Error("That folder has no manifest.json.")
   const main = await read("main.js")
   if (!main) throw new Error("That folder has no main.js.")
+  const text = new TextDecoder().decode(manifest)
+  const iconPath = iconPathIn(text)
+  const icon = iconPath ? await read("icon", iconPath) : null
   return {
-    manifest: new TextDecoder().decode(manifest),
+    manifest: text,
     main,
     styles: await read("styles.css"),
+    icon: iconPath && icon ? { path: iconPath, bytes: icon } : null,
   }
 }
 
@@ -90,29 +117,46 @@ export function readPluginZip(bytes: Uint8Array): PluginFiles {
   }
   const prefix = manifests[0]!.slice(0, -"manifest.json".length)
 
-  const wanted = new Map<string, InstallFile>(
-    (Object.keys(LIMITS) as InstallFile[]).map((name) => [prefix + name, name])
+  // The icon is not among these: where it is is the manifest's to say, so it
+  // is a third pass once the manifest has been read.
+  const fixed: InstallFile[] = ["manifest.json", "main.js", "styles.css"]
+  const files = inflate(
+    bytes,
+    new Map(fixed.map((name) => [prefix + name, name]))
   )
-  const files = unzipSync(bytes, {
-    filter: (entry) => {
-      const name = wanted.get(entry.name)
-      if (!name) return false
-      if (entry.originalSize > LIMITS[name]) {
-        throw new Error(`${name} is too large.`)
-      }
-      return true
-    },
-  })
 
   const manifest = files[prefix + "manifest.json"]
   const main = files[prefix + "main.js"]
   if (!manifest) throw new Error("That archive has no manifest.json.")
   if (!main) throw new Error("That archive has no main.js beside its manifest.")
+  const text = new TextDecoder().decode(manifest)
+  const iconPath = iconPathIn(text)
+  const icon = iconPath
+    ? inflate(bytes, new Map([[prefix + iconPath, "icon"]]))[prefix + iconPath]
+    : undefined
   return {
-    manifest: new TextDecoder().decode(manifest),
+    manifest: text,
     main,
     styles: files[prefix + "styles.css"] ?? null,
+    icon: iconPath && icon ? { path: iconPath, bytes: icon } : null,
   }
+}
+
+/** The entries of `bytes` named in `wanted`, each held to its file's limit. */
+function inflate(
+  bytes: Uint8Array,
+  wanted: Map<string, InstallFile>
+): Record<string, Uint8Array> {
+  return unzipSync(bytes, {
+    filter: (entry) => {
+      const name = wanted.get(entry.name)
+      if (!name) return false
+      if (entry.originalSize > LIMITS[name]) {
+        throw new Error(`${entry.name.split("/").at(-1)} is too large.`)
+      }
+      return true
+    },
+  })
 }
 
 /**
@@ -158,6 +202,11 @@ export async function installPlugin(
   await writeFile(path.join(incoming, "main.js"), files.main)
   if (files.styles) {
     await writeFile(path.join(incoming, "styles.css"), files.styles)
+  }
+  if (files.icon) {
+    const target = path.join(incoming, ...files.icon.path.split("/"))
+    await mkdir(path.dirname(target), { recursive: true })
+    await writeFile(target, files.icon.bytes)
   }
 
   const replaced = await exists(target)

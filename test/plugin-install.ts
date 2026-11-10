@@ -24,8 +24,8 @@ import { check, finish, section } from "./harness"
  * real archives: what is copied, what is refused, and that an update replaces.
  */
 
-const manifest = (id: string, version = "1.0.0") =>
-  JSON.stringify({ id, name: `Plugin ${id}`, version })
+const manifest = (id: string, version = "1.0.0", extra: object = {}) =>
+  JSON.stringify({ id, name: `Plugin ${id}`, version, ...extra })
 
 async function throwsWith(
   run: () => Promise<unknown> | unknown,
@@ -52,7 +52,13 @@ try {
     // A repository: the built files beside its source and its dependencies.
     const source = path.join(root, "my-plugin-main")
     await mkdir(path.join(source, "node_modules", "x"), { recursive: true })
-    await writeFile(path.join(source, "manifest.json"), manifest("hello"))
+    await mkdir(path.join(source, "assets"), { recursive: true })
+    await writeFile(
+      path.join(source, "manifest.json"),
+      manifest("hello", "1.0.0", { icon: "assets/logo.png" })
+    )
+    await writeFile(path.join(source, "assets", "logo.png"), "png")
+    await writeFile(path.join(source, "assets", "other.png"), "png")
     await writeFile(path.join(source, "main.js"), "export default {}")
     await writeFile(path.join(source, "styles.css"), "p{}")
     await writeFile(path.join(source, "README.md"), "#")
@@ -62,9 +68,15 @@ try {
     check("a first install", installed.replaced === false)
     const copied = (await readdir(path.join(roots.user, "hello"))).sort()
     check(
-      "the three served files and nothing else",
-      copied.join(",") === "main.js,manifest.json,styles.css",
+      "the served files and nothing else",
+      copied.join(",") === "assets,main.js,manifest.json,styles.css",
       copied
+    )
+    const assets = await readdir(path.join(roots.user, "hello", "assets"))
+    check(
+      "the icon at its path, alone",
+      assets.join(",") === "logo.png",
+      assets
     )
 
     await writeFile(
@@ -103,8 +115,11 @@ try {
   section("from a zip")
   {
     const nested = zipSync({
-      "chat-tools-1.2.0/manifest.json": strToU8(manifest("chat-tools")),
+      "chat-tools-1.2.0/manifest.json": strToU8(
+        manifest("chat-tools", "1.2.0", { icon: "art/mark.webp" })
+      ),
       "chat-tools-1.2.0/main.js": strToU8("export default {}"),
+      "chat-tools-1.2.0/art/mark.webp": strToU8("webp"),
       "chat-tools-1.2.0/src/index.ts": strToU8("// source"),
       "chat-tools-1.2.0/../../escape.js": strToU8("nope"),
     })
@@ -116,7 +131,14 @@ try {
     check(
       "only the served files",
       (await readdir(path.join(roots.user, "chat-tools"))).sort().join(",") ===
-        "main.js,manifest.json"
+        "art,main.js,manifest.json"
+    )
+    check(
+      "the icon the manifest names",
+      (await readFile(
+        path.join(roots.user, "chat-tools", "art", "mark.webp"),
+        "utf8"
+      )) === "webp"
     )
     check(
       "nothing written outside the plugins folder",
@@ -184,6 +206,7 @@ try {
       manifest: text,
       main: strToU8("export default {}"),
       styles: null,
+      icon: null,
     })
     check(
       "a built-in plugin's id",

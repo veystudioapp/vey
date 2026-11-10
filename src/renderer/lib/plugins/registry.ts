@@ -24,6 +24,7 @@ export const PLUGIN_ICONS = [
   "file",
   "share",
   "chart",
+  "network",
   "puzzle",
 ] as const
 export type PluginIcon = (typeof PLUGIN_ICONS)[number]
@@ -44,6 +45,20 @@ export type PluginRailButton = {
   id: string
   pluginId: string
   label: string
+  icon: PluginIcon
+  run: () => void | Promise<void>
+}
+
+/**
+ * One button a plugin added to the system bar, at its right beside Feedback —
+ * a tool wanted rarely and at a moment, which the rail's foot is too loud for.
+ */
+export type PluginStatusBarItem = {
+  id: string
+  pluginId: string
+  label: string
+  /** The tooltip; the label when absent. */
+  title: string
   icon: PluginIcon
   run: () => void | Promise<void>
 }
@@ -138,6 +153,7 @@ export class PluginRegistry {
   private readonly disposers = new Map<string, (() => void)[]>()
   private readonly chatMenuItems = new Map<string, PluginChatMenuItem>()
   private readonly railButtons = new Map<string, PluginRailButton>()
+  private readonly statusBarItems = new Map<string, PluginStatusBarItem>()
   private readonly linters = new Map<string, PluginLinter>()
   private readonly lineAnnotators = new Map<string, PluginLineAnnotator>()
   private readonly modules = new Map<string, PluginModule<unknown>>()
@@ -216,6 +232,42 @@ export class PluginRegistry {
   /** Every rail button, in the order they were added. */
   railButtonList(): PluginRailButton[] {
     return [...this.railButtons.values()]
+  }
+
+  addStatusBarItem(
+    pluginId: string,
+    item: {
+      id: string
+      label: string
+      title?: string
+      icon?: string
+      run: PluginStatusBarItem["run"]
+    }
+  ): void {
+    if (typeof item?.run !== "function") {
+      throw new Error("A status bar item needs a `run` function.")
+    }
+    const id = `${pluginId}:${String(item.id)}`
+    const label = String(item.label || item.id)
+    this.statusBarItems.set(id, {
+      id,
+      pluginId,
+      label,
+      title: item.title ? String(item.title) : label,
+      icon: iconOf(item.icon),
+      run: item.run,
+    })
+    this.track(pluginId, () => {
+      if (this.statusBarItems.get(id)?.run === item.run) {
+        this.statusBarItems.delete(id)
+      }
+    })
+    this.changed()
+  }
+
+  /** Every status bar item, in the order they were added. */
+  statusBarItemList(): PluginStatusBarItem[] {
+    return [...this.statusBarItems.values()]
   }
 
   addLinter(

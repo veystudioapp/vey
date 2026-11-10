@@ -1153,7 +1153,7 @@ endpoint with their own key.
 ## Plugins
 
 Obsidian's model, not VS Code's. A plugin is a directory — `manifest.json`,
-`main.js`, optionally `styles.css` — in one of two folders. The **built-in** one
+`main.js`, optionally `styles.css` and an icon — in one of two folders. The **built-in** one
 ships inside the app: `plugins/<id>/src/main.ts` in this repository, bundled by
 `scripts/build-plugins.mjs` into `dist-plugins/` and carried as an
 `extraResources` entry; a plugin there is **on until switched off**
@@ -1170,8 +1170,8 @@ which any plugin could fill in.
 view has `Install from folder…` and `Install from .zip…`
 (`main/plugin-install.ts`), and the marketplace, when there is one, will
 download an archive and hand it to the same `installPlugin`. An install
-**copies three files** — `manifest.json`, `main.js`, `styles.css`, the ones
-that are served — under the id the manifest gives, so a plugin's repository
+**copies the files that are served** — `manifest.json`, `main.js`,
+`styles.css` and the manifest's icon at its path — under the id the manifest gives, so a plugin's repository
 brings none of its `src/` or `node_modules/`, and no path inside a zip ever
 becomes a path on disk. A zip may hold the plugin at its root or inside one
 folder, as GitHub's downloads do. The same id again is an **update**, swapped in
@@ -1183,6 +1183,22 @@ folder" any more — it taught dropping files into a hidden directory as the way
 to install, which is the thing this replaces. `fflate` reads the zips: no
 dependency of its own, and the alternative was shelling out to a different
 unzip on each OS.
+
+**A plugin's icon is the manifest's to name** — `"icon": "assets/logo.png"`,
+any path inside its folder, any of `svg`, `png`, `jpg`, `webp`, `gif`
+(`pluginIconPathOf`). It was a fixed `icon.svg` beside `main.js` for a day,
+and that was refused: a logo is a PNG as often as not, and a plugin's assets
+live where its author put them. The URL does not carry the path —
+`vsc-plugin://<id>/icon` is a stand-in main resolves by reading the manifest
+(`pluginFilePath`), so the one file a page can reach beyond `main.js` and
+`styles.css` is the one the plugin declared. A path climbing out, absolute, or
+not a picture is a manifest error; a good path to a missing file is only the
+puzzle piece. The Plugins view draws it as an `img` in its own colours — a
+CSS mask over the text colour was tried first and fits a monochrome SVG only;
+a PNG logo came out as a silhouette — so an SVG carries its colour in the
+file (the built-in plugins' are Lucide marks, each in one 500-weight hue that
+reads on both themes). Served with a `sandbox` CSP, so an SVG opened as a
+document runs nothing.
 
 Its `main.js` is an ES module the renderer `import()`s off this app's
 `vsc-plugin://` scheme (`main/protocol.ts`), and its default export's `onload`
@@ -1353,6 +1369,31 @@ its i18n import so the pure half can be bundled. `GIT_TONES` and `dateTimeOf`
 are copied, two lines each, because their modules hold a store and a locale.
 147 KB minified, nearly all of it the base-ui tooltip the card's buttons use —
 the same bargain the usage plugin made with its dialog.
+
+### Ports, the fifth
+
+The system bar's `Ports` — the TCP ports being listened on and a Stop for what
+holds one — is `plugins/ports/`. It is a tool for one moment, the `EADDRINUSE`
+a dev server left behind, and somebody who never meets that moment has a button
+they never press; as a plugin it can be switched off.
+
+It stays where it was rather than moving to the rail, which needed one thing
+from the platform: **`app.addStatusBarItem`**, a button on the system bar's
+right beside Feedback (`PluginStatusBarItem`, drawn by `system-bar.tsx`, a
+throw reported through the same `runPluginButton` the rail's buttons use). The
+rail's foot is for views of the workspace; a word at the window's edge is
+enough to be found by when the error names a port. Its icon is a name from
+`PLUGIN_ICONS` (`network`), so it is drawn in the bar's muted tone — the sky
+blue it had was the app styling its own button, and a plugin hands over no
+colour.
+
+The listing and the signal stay in main (`main/ports.ts`, `IPC.listPorts` /
+`IPC.stopPortProcess`, unchanged and still `test/ports.ts`'s) and the plugin
+reaches them as **`app.ports.list` / `app.ports.stop`** — ESLint's split again:
+the runner is the capability, the plugin the policy. The dialog moved whole
+from `components/studio/ports-dialog.tsx`; its words are still `nav.ports.*`,
+through `app.t`. The button's label and title are read once at load, so a
+language switch reaches them on the plugin's next load.
 
 ## MCP: what the user's own `claude` has
 

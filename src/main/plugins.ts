@@ -5,6 +5,7 @@ import path from "node:path"
 import {
   isPluginId,
   PLUGIN_FILES,
+  pluginIconPathOf,
   type PluginFile,
   type PluginInfo,
   type PluginManifest,
@@ -99,7 +100,13 @@ async function readPlugin(
   bundled: boolean
 ): Promise<PluginInfo> {
   const dir = path.join(root, name)
-  const listed = { id: name, bundled, manifest: null, hasStyles: false }
+  const listed = {
+    id: name,
+    bundled,
+    manifest: null,
+    hasStyles: false,
+    hasIcon: false,
+  }
 
   if (!isPluginId(name)) {
     return {
@@ -127,6 +134,9 @@ async function readPlugin(
     bundled,
     manifest,
     hasStyles: await isFile(path.join(dir, "styles.css")),
+    hasIcon: manifest.icon
+      ? await isFile(path.join(dir, ...manifest.icon.split("/")))
+      : false,
     error: null,
   }
 }
@@ -168,12 +178,22 @@ export function parseManifest(text: string, dirName: string): PluginManifest {
 
   const description = text255(record.description)
   const author = text255(record.author)
+  // A wrong path is the author's mistake and said so; a right path to a file
+  // that is missing is only a plugin drawn with the puzzle piece (`hasIcon`).
+  const icon =
+    record.icon === undefined ? undefined : pluginIconPathOf(record.icon)
+  if (icon === null) {
+    throw new Error(
+      "manifest.json's `icon` must be a path inside the plugin's folder to an .svg, .png, .jpg, .webp or .gif file."
+    )
+  }
   return {
     id,
     name,
     version,
     ...(description ? { description } : {}),
     ...(author ? { author } : {}),
+    ...(icon ? { icon } : {}),
   }
 }
 
@@ -183,17 +203,29 @@ export function parseManifest(text: string, dirName: string): PluginManifest {
  * Checked here rather than at the protocol handler alone, the way
  * `noteFilePath` is: the id and the file come out of a URL, and a URL is
  * whatever the page asked for.
+ *
+ * `icon` is whatever the plugin's manifest names, read at the moment it is
+ * asked for — so an edited manifest is followed on the next Reload — and
+ * checked again by `parseManifest`, never taken from the URL.
  */
-export function pluginFilePath(
+export async function pluginFilePath(
   root: string,
   id: string,
   file: PluginFile
-): string {
+): Promise<string> {
   if (!isPluginId(id)) throw new Error(`Not a plugin id: ${id}`)
   if (!(PLUGIN_FILES as readonly string[]).includes(file)) {
     throw new Error(`Not a plugin file: ${file}`)
   }
-  return path.join(root, id, file)
+  const dir = path.join(root, id)
+  if (file !== "icon") return path.join(dir, file)
+
+  const manifest = parseManifest(
+    await readCapped(path.join(dir, "manifest.json"), MAX_MANIFEST_BYTES),
+    id
+  )
+  if (!manifest.icon) throw new Error(`${id} names no icon.`)
+  return path.join(dir, ...manifest.icon.split("/"))
 }
 
 /**

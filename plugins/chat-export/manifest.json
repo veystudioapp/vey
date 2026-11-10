@@ -3,5 +3,6 @@
   "name": "Chat export",
   "version": "1.0.0",
   "description": "Copy a chat as Markdown, or save it as a Markdown or HTML file.",
-  "author": "Vey"
+  "author": "Vey",
+  "icon": "icon.svg"
 }

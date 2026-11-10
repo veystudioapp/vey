@@ -6,6 +6,7 @@ import {
   type PluginInstall,
   type PluginSource,
 } from "@shared/plugins"
+import { t } from "@/lib/i18n"
 import { getSetting, setSetting } from "@/lib/workspace"
 
 import { createPluginApp } from "./app"
@@ -16,6 +17,7 @@ import {
   type PluginLineAnnotator,
   type PluginLinter,
   type PluginRailButton,
+  type PluginStatusBarItem,
 } from "./registry"
 
 /**
@@ -57,6 +59,7 @@ type PluginsState = {
   status: Record<string, PluginStatus>
   chatMenuItems: PluginChatMenuItem[]
   railButtons: PluginRailButton[]
+  statusBarItems: PluginStatusBarItem[]
   /** Read by every file editor as it lints — `lib/plugins/editor-lint.ts`. */
   linters: PluginLinter[]
   /** Read by every file editor — `lib/plugins/editor-line-annotation.ts`. */
@@ -94,6 +97,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
     set({
       chatMenuItems: registry.chatMenuList(),
       railButtons: registry.railButtonList(),
+      statusBarItems: registry.statusBarItemList(),
       linters: registry.linterList(),
       lineAnnotators: registry.lineAnnotatorList(),
     })
@@ -181,6 +185,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
     status: {},
     chatMenuItems: [],
     railButtons: [],
+    statusBarItems: [],
     linters: [],
     lineAnnotators: [],
     notices: [],
@@ -263,6 +268,30 @@ export const usePlugins = create<PluginsState>((set, get) => {
     },
   }
 })
+
+/**
+ * Runs a button a plugin added — on the rail or the system bar — a throw
+ * reported in the plugin's name: the button has nothing of its own on screen
+ * to show it in.
+ */
+export async function runPluginButton(button: {
+  pluginId: string
+  label: string
+  run: () => void | Promise<void>
+}): Promise<void> {
+  try {
+    await button.run()
+  } catch (error) {
+    console.error(`[plugin ${button.pluginId}]`, error)
+    usePlugins.getState().notify(
+      button.pluginId,
+      t("nav.rail.pluginFailed", {
+        label: button.label,
+        error: messageOf(error),
+      })
+    )
+  }
+}
 
 /** Whether a plugin is switched on: a built-in one unless it was switched off,
  * a user's only once it was switched on. */

@@ -11,7 +11,12 @@ import {
   readPluginData,
   writePluginData,
 } from "../src/main/plugins"
-import { isPluginId, pluginFileOf, pluginUrl } from "../src/shared/plugins"
+import {
+  isPluginId,
+  pluginFileOf,
+  pluginIconPathOf,
+  pluginUrl,
+} from "../src/shared/plugins"
 import { check, finish, section } from "./harness"
 
 /**
@@ -58,6 +63,28 @@ check(
   pluginFileOf("vsc-plugin://hello/../other/main.js") === null
 )
 check("other schemes", pluginFileOf("https://hello/main.js") === null)
+check("the icon", pluginFileOf("vsc-plugin://hello/icon")?.file === "icon")
+check(
+  "not the icon's own name",
+  pluginFileOf("vsc-plugin://hello/icon.svg") === null
+)
+
+section("icon paths")
+check("a file beside the manifest", pluginIconPathOf("icon.svg") === "icon.svg")
+check(
+  "in a folder, any name",
+  pluginIconPathOf("assets/Logo.PNG") === "assets/Logo.PNG"
+)
+check("a leading ./ dropped", pluginIconPathOf("./logo.webp") === "logo.webp")
+check("jpg, jpeg and gif", ["a.jpg", "a.jpeg", "a.gif"].every(pluginIconPathOf))
+check("not climbing out", pluginIconPathOf("../other/icon.svg") === null)
+check("not in the middle", pluginIconPathOf("a/../../icon.svg") === null)
+check("not absolute", pluginIconPathOf("/etc/icon.svg") === null)
+check("not Windows", pluginIconPathOf("C:\\icon.svg") === null)
+check("not a backslash", pluginIconPathOf("assets\\icon.svg") === null)
+check("not a script", pluginIconPathOf("main.js") === null)
+check("not empty segments", pluginIconPathOf("a//icon.svg") === null)
+check("not a number", pluginIconPathOf(3) === null)
 
 section("manifest")
 {
@@ -84,14 +111,27 @@ section("manifest")
   check("id must be the folder's", throws(manifest("other")))
   check("needs a name", throws(JSON.stringify({ id: "hello", version: "1" })))
   check("needs a version", throws(JSON.stringify({ id: "hello", name: "x" })))
+  check(
+    "an icon is kept",
+    parseManifest(manifest("hello", { icon: "a/b.png" }), "hello").icon ===
+      "a/b.png"
+  )
+  check("no icon is none", parsed.icon === undefined)
+  check("an icon outside", throws(manifest("hello", { icon: "../x.svg" })))
+  check("an icon not a picture", throws(manifest("hello", { icon: "x.js" })))
 }
 
 section("listing")
 {
   const root = await folder({
-    "hello/manifest.json": manifest("hello"),
+    "hello/manifest.json": manifest("hello", { icon: "assets/logo.png" }),
     "hello/main.js": "export default { onload() {} }",
     "hello/styles.css": "",
+    "hello/assets/logo.png": "png",
+    "no-icon-file/manifest.json": manifest("no-icon-file", {
+      icon: "gone.svg",
+    }),
+    "no-icon-file/main.js": "",
     "no-main/manifest.json": manifest("no-main"),
     "broken/manifest.json": "{",
     "broken/main.js": "",
@@ -106,13 +146,20 @@ section("listing")
     check(
       "every directory but the hidden one",
       listed.map((plugin) => plugin.id).join(",") ===
-        "Bad Name,broken,hello,no-main",
+        "Bad Name,broken,hello,no-icon-file,no-main",
       listed.map((plugin) => plugin.id)
     )
     check(
       "a good one",
       byId.get("hello")?.error === null && byId.get("hello")?.hasStyles === true
     )
+    check("its icon", byId.get("hello")?.hasIcon === true)
+    check(
+      "an icon named but not there",
+      byId.get("no-icon-file")?.error === null &&
+        byId.get("no-icon-file")?.hasIcon === false
+    )
+    check("no icon", byId.get("broken")?.hasIcon === false)
     check("no main.js", byId.get("no-main")?.error === "There is no main.js.")
     check("bad JSON is listed with why", !!byId.get("broken")?.error)
     check("a bad folder name is listed with why", !!byId.get("Bad Name")?.error)
@@ -183,16 +230,33 @@ section("files and data")
   try {
     check(
       "a plugin's file",
-      pluginFilePath(root, "hello", "main.js") ===
+      (await pluginFilePath(root, "hello", "main.js")) ===
         path.join(root, "hello", "main.js")
     )
     let refused = false
     try {
-      pluginFilePath(root, "..", "main.js")
+      await pluginFilePath(root, "..", "main.js")
     } catch {
       refused = true
     }
     check("refuses an id that climbs", refused)
+
+    let noIcon = false
+    try {
+      await pluginFilePath(root, "hello", "icon")
+    } catch {
+      noIcon = true
+    }
+    check("no icon without a manifest naming one", noIcon)
+    await writeFile(
+      path.join(root, "hello", "manifest.json"),
+      manifest("hello", { icon: "./art/mark.svg" })
+    )
+    check(
+      "the icon the manifest names",
+      (await pluginFilePath(root, "hello", "icon")) ===
+        path.join(root, "hello", "art", "mark.svg")
+    )
 
     check(
       "nothing saved yet",

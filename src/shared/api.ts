@@ -2185,7 +2185,7 @@ export type SystemUsage = {
 
 /**
  * A TCP port something on this machine is listening on, and what holds it —
- * the system bar's `Ports` (`main/ports.ts`).
+ * the built-in `ports` plugin's dialog (`main/ports.ts`, `plugins/ports/`).
  */
 export type ListeningPort = {
   port: number

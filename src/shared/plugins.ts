@@ -28,9 +28,53 @@ export function isPluginId(id: unknown): id is string {
   return typeof id === "string" && PLUGIN_ID.test(id)
 }
 
-/** The files a plugin is served from; nothing else in its directory is. */
-export const PLUGIN_FILES = ["main.js", "styles.css"] as const
+/**
+ * The files a plugin is served from; nothing else in its directory is.
+ *
+ * `icon` is not a file name but a stand-in for whichever file the manifest's
+ * `icon` names — main reads the manifest to find it — so the URL never carries
+ * a path out of the page, and the one path it can reach is one the plugin's
+ * own manifest declared.
+ */
+export const PLUGIN_FILES = ["main.js", "styles.css", "icon"] as const
 export type PluginFile = (typeof PLUGIN_FILES)[number]
+
+/** What a plugin's icon may be, by extension, and the type it is served as. */
+export const PLUGIN_ICON_TYPES: Record<string, string> = {
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+}
+
+/**
+ * The manifest's `icon`, as a path inside the plugin's folder, or null for one
+ * that is not: absolute, climbing out with `..`, a Windows path, or not one of
+ * `PLUGIN_ICON_TYPES`. `/`-separated whatever the platform, the way a URL and
+ * a zip both are; a leading `./` is dropped.
+ */
+export function pluginIconPathOf(raw: unknown): string | null {
+  if (typeof raw !== "string" || raw.length === 0 || raw.length > 255) {
+    return null
+  }
+  if (raw.includes("\\") || raw.includes(":") || raw.startsWith("/")) {
+    return null
+  }
+  const segments = raw.split("/").filter((segment, index) => {
+    return !(index === 0 && segment === ".")
+  })
+  if (
+    segments.length === 0 ||
+    segments.some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    return null
+  }
+  const extension = segments.at(-1)!.split(".").at(-1)!.toLowerCase()
+  if (!Object.hasOwn(PLUGIN_ICON_TYPES, extension)) return null
+  return segments.join("/")
+}
 
 /** `manifest.json`, as far as this app reads it. */
 export type PluginManifest = {
@@ -39,6 +83,9 @@ export type PluginManifest = {
   version: string
   description?: string
   author?: string
+  /** A path inside the plugin's folder — `icon.svg`, `assets/logo.png`. See
+   * `pluginIconPathOf`. */
+  icon?: string
 }
 
 /**
@@ -60,6 +107,8 @@ export type PluginInfo = {
   bundled: boolean
   manifest: PluginManifest | null
   hasStyles: boolean
+  /** The manifest names an `icon` and that file is there. */
+  hasIcon: boolean
   error: string | null
 }
 

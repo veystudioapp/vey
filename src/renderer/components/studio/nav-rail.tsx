@@ -2,13 +2,12 @@ import type { ReactNode } from "react"
 import { Puzzle, Search, Settings, SquareTerminal } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { t as translate, useT } from "@/lib/i18n"
+import { useT } from "@/lib/i18n"
 import { useDock } from "@/lib/dock"
 import { useProjects } from "@/lib/projects"
 import { useWorkspaceSearch } from "@/lib/workspace-search"
 import { PLUGIN_ICON_COMPONENTS } from "@/lib/plugins/icons"
-import type { PluginRailButton } from "@/lib/plugins/registry"
-import { usePlugins } from "@/lib/plugins/store"
+import { runPluginButton, usePlugins } from "@/lib/plugins/store"
 import { IconButton } from "./icon-button"
 import { ProjectRail } from "./project/project-rail"
 
@@ -89,7 +88,7 @@ export function NavRail({
           <RailButton
             key={button.id}
             label={button.label}
-            onClick={() => void runRailButton(button)}
+            onClick={() => void runPluginButton(button)}
           >
             <Icon />
           </RailButton>
@@ -108,23 +107,6 @@ export function NavRail({
       </RailButton>
     </nav>
   )
-}
-
-/** One plugin's rail button, a throw reported in the plugin's name — the
- * button has nothing of its own on screen to show it in. */
-async function runRailButton(button: PluginRailButton): Promise<void> {
-  try {
-    await button.run()
-  } catch (error) {
-    console.error(`[plugin ${button.pluginId}]`, error)
-    usePlugins.getState().notify(
-      button.pluginId,
-      translate("nav.rail.pluginFailed", {
-        label: button.label,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    )
-  }
 }
 
 function RailButton({

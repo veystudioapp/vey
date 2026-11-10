@@ -6,6 +6,7 @@ import {
   type ChatEvent,
   type GitBlame,
   type GitLineCommit,
+  type ListeningPort,
 } from "@shared/api"
 import type { EslintResult } from "@shared/eslint"
 import type { PluginManifest } from "@shared/plugins"
@@ -60,6 +61,14 @@ export type PluginApp = {
   addRailButton: (button: {
     id: string
     label: string
+    icon?: PluginIcon
+    run: () => void | Promise<void>
+  }) => void
+  /** A button on the system bar, at its right beside Feedback. */
+  addStatusBarItem: (item: {
+    id: string
+    label: string
+    title?: string
     icon?: PluginIcon
     run: () => void | Promise<void>
   }) => void
@@ -148,6 +157,17 @@ export type PluginApp = {
     ) => void
   }
 
+  /**
+   * The TCP ports being listened on, and stopping what holds one — read and
+   * signalled in main (`main/ports.ts`), which a page has no way to do.
+   */
+  ports: {
+    list: () => Promise<ListeningPort[]>
+    /** SIGTERM, or SIGKILL with `force`. Refused for a pid not listening at
+     * that moment, and for this app itself. */
+    stop: (pid: number, force: boolean) => Promise<void>
+  }
+
   /** Types into the composer of the chat on screen — a new one in the
    * project when none is — unsent: the question is still the user's. */
   composer: { insert: (text: string) => void }
@@ -182,6 +202,7 @@ export function createPluginApp(
 
     addChatMenuItem: (item) => registry.addChatMenuItem(id, item),
     addRailButton: (button) => registry.addRailButton(id, button),
+    addStatusBarItem: (item) => registry.addStatusBarItem(id, item),
     notice: (text) => notice(id, String(text)),
     t,
     locale: currentLocale,
@@ -229,6 +250,11 @@ export function createPluginApp(
           ...(commit.from === undefined ? {} : { from: commit.from }),
         })
       },
+    },
+
+    ports: {
+      list: () => window.desktop.listPorts(),
+      stop: (pid, force) => window.desktop.stopPortProcess(pid, force),
     },
 
     composer: {

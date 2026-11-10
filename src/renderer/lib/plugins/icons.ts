@@ -1,6 +1,7 @@
 import {
   ChartColumn,
   ClipboardCopy,
+  EthernetPort,
   File,
   FileCode,
   FileDown,
@@ -19,5 +20,6 @@ export const PLUGIN_ICON_COMPONENTS: Record<PluginIcon, LucideIcon> = {
   file: File,
   share: Share,
   chart: ChartColumn,
+  network: EthernetPort,
   puzzle: Puzzle,
 }

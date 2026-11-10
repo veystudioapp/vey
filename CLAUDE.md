@@ -172,7 +172,8 @@ imports may reach `electron`.
   random install id, with the version and OS and **nothing about what is
   worked on**. A dev build reports only to a localhost server; off without
   `serverUrl()`, off by `TELEMETRY_KEY`. `docs/design.md` § Usage counts.
-- **`ports.ts`** — the system bar's `Ports` dialog (`ports-dialog.tsx`): the
+- **`ports.ts`** — the system bar's `Ports` dialog, the built-in `ports`
+  plugin (`plugins/ports/`, through `app.ports` and `app.addStatusBarItem`): the
   TCP ports being listened on (`lsof -F` on macOS/Linux, `netstat` +
   `tasklist` on Windows, each line's command from `ps`) and a Stop for the
   process holding one — SIGTERM, then a `Force quit` SIGKILL for one still
@@ -308,10 +309,12 @@ learnings…`, its dialog, `main/learnings.ts`, `shared/learnings.ts` and the
   into `dist-plugins/`, an `extraResources` entry; on until switched off) and
   the user's `workspace/plugins/<id>/` (off until switched on), filled by
   **installing** from a folder or a `.zip` (`plugin-install.ts` — copies the
-  three served files under the manifest's id; the same id again updates; the
+  served files under the manifest's id; the same id again updates; the
   marketplace will call the same `installPlugin`). Listing manifests, `workspace/plugin-data/<id>.json`, and the path the
-  `vsc-plugin://` handler in `protocol.ts` serves — `main.js` and `styles.css`
-  only. Nothing here runs one: the renderer `import()`s it (`lib/plugins/`).
+  `vsc-plugin://` handler in `protocol.ts` serves — `main.js`, `styles.css`
+  and the icon the manifest's `icon` names (any path inside the folder, `svg`
+  / `png` / `jpg` / `webp` / `gif`, `pluginIconPathOf`), served as `icon` so
+  the URL carries no path. Nothing here runs one: the renderer `import()`s it (`lib/plugins/`).
   **Not a sandbox** — a plugin can reach `window.desktop`. A built-in plugin
   may import the renderer's **pure** modules and nothing stateful or heavy;
   what it needs from the app comes through `PluginApp`, and React is **the
@@ -320,7 +323,8 @@ learnings…`, its dialog, `main/learnings.ts`, `shared/learnings.ts` and the
   **usage dashboard** (`plugins/usage/`, the rail's `Usage` button) and
   **ESLint** (`plugins/eslint/`, the editor's squiggles) and **Git blame**
   (`plugins/git-blame/`, the current-line annotation and its card — it was a
-  Settings switch) are built-in plugins. `docs/design.md` § Plugins has the argument.
+  Settings switch) and **Ports** (`plugins/ports/`, the system bar's button)
+  are built-in plugins. `docs/design.md` § Plugins has the argument.
 
 - **There is no Vey Pro** — the app is free, all of it: every account, every
   project, the custom API. The licence keys, the trial, the Polar checkout,

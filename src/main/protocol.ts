@@ -4,7 +4,12 @@ import { pathToFileURL } from "node:url"
 import { net, protocol } from "electron"
 
 import { NOTE_FILE_SCHEME, noteFileNameOf } from "../shared/note-files"
-import { PLUGIN_SCHEME, pluginFileOf, type PluginFile } from "../shared/plugins"
+import {
+  PLUGIN_ICON_TYPES,
+  PLUGIN_SCHEME,
+  pluginFileOf,
+  type PluginFile,
+} from "../shared/plugins"
 
 /**
  * The origin the built renderer is served from.
@@ -46,7 +51,7 @@ export function registerAppScheme(): void {
       privileges: { standard: true, secure: true, stream: true },
     },
     /*
-     * A plugin's `main.js` and `styles.css` — see `servePlugins`.
+     * A plugin's `main.js`, `styles.css` and icon — see `servePlugins`.
      *
      * `corsEnabled` and `supportFetchAPI` because the renderer `import()`s the
      * script, and a module is fetched in CORS mode from whatever origin the page
@@ -126,9 +131,17 @@ export function serveNoteFiles(pathOf: (fileName: string) => string): void {
 /** What a plugin's files are served as. Set rather than left to `net.fetch`'s
  * guess off the extension, because a module script with any other type is
  * refused outright. */
-const PLUGIN_TYPES: Record<PluginFile, string> = {
+const PLUGIN_TYPES: Record<Exclude<PluginFile, "icon">, string> = {
   "main.js": "text/javascript; charset=utf-8",
   "styles.css": "text/css; charset=utf-8",
+}
+
+/** An icon's type by its extension, which `pluginIconPathOf` has already
+ * held to `PLUGIN_ICON_TYPES`. */
+function typeOf(file: PluginFile, target: string): string {
+  if (file !== "icon") return PLUGIN_TYPES[file]
+  const extension = path.extname(target).slice(1).toLowerCase()
+  return PLUGIN_ICON_TYPES[extension] ?? "application/octet-stream"
 }
 
 /**
@@ -141,7 +154,7 @@ const PLUGIN_TYPES: Record<PluginFile, string> = {
  * renderer adds only gets past the module map, not the HTTP cache.
  */
 export function servePlugins(
-  pathOf: (id: string, file: PluginFile) => string
+  pathOf: (id: string, file: PluginFile) => Promise<string>
 ): void {
   protocol.handle(PLUGIN_SCHEME, async (request) => {
     const named = pluginFileOf(request.url)
@@ -149,7 +162,7 @@ export function servePlugins(
 
     let target: string
     try {
-      target = pathOf(named.id, named.file)
+      target = await pathOf(named.id, named.file)
     } catch {
       return new Response("Forbidden", { status: 403 })
     }
@@ -159,9 +172,17 @@ export function servePlugins(
     return new Response(response.body, {
       status: 200,
       headers: {
-        "Content-Type": PLUGIN_TYPES[named.file],
+        "Content-Type": typeOf(named.file, target),
         "Cache-Control": "no-store",
         "Access-Control-Allow-Origin": "*",
+        // An SVG opened as a document rather than drawn in an `img` would run
+        // its scripts; an icon is a picture either way.
+        ...(named.file === "icon"
+          ? {
+              "Content-Security-Policy":
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+            }
+          : {}),
       },
     })
   })

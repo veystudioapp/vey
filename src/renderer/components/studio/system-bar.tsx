@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react"
 import {
   Cpu,
-  EthernetPort,
   FileDiff,
   GitBranch,
   MemoryStick,
@@ -17,6 +16,8 @@ import { unreadIn } from "@/lib/chat/unread"
 import { useFeedbackDialog } from "@/lib/feedback"
 import { changeCount, useChanges } from "@/lib/files/changes"
 import { useGitStatus } from "@/lib/files/git-status"
+import { PLUGIN_ICON_COMPONENTS } from "@/lib/plugins/icons"
+import { runPluginButton, usePlugins } from "@/lib/plugins/store"
 import { shownRootOf } from "@/lib/files/roots"
 import { useProjects } from "@/lib/projects"
 import { useStudio } from "@/lib/store"
@@ -26,7 +27,6 @@ import { useUpdateWatch } from "@/lib/updates"
 import { useT, type Translate } from "@/lib/i18n"
 import { Mark } from "./mark"
 import { UpdatePill } from "./update-pill"
-import { PortsDialog } from "./ports-dialog"
 
 /**
  * What the machine has left, along the bottom of the window.
@@ -53,7 +53,7 @@ export function SystemBar() {
   // thing that keeps the check running.
   useUpdateWatch()
   const t = useT()
-  const [ports, setPorts] = useState(false)
+  const pluginItems = usePlugins((state) => state.statusBarItems)
 
   return (
     // No edge or fill of its own: it sits on the canvas under the cards, which
@@ -82,18 +82,25 @@ export function SystemBar() {
           <MessageSquareHeart className="size-3 shrink-0 text-violet-500 transition-transform group-hover:scale-110" />
           {t("nav.systemBar.feedback")}
         </button>
-        {/* A tool rather than a way out, but wanted as rarely and at the
-            same moment — when something says a port is already in use. */}
-        <button
-          type="button"
-          className={cn(ACTION, "group font-medium text-foreground/80")}
-          title={t("nav.systemBar.portsTitle")}
-          onClick={() => setPorts(true)}
-        >
-          <EthernetPort className="size-3 shrink-0 text-sky-500 transition-transform group-hover:scale-110" />
-          {t("nav.systemBar.ports")}
-        </button>
-        {ports && <PortsDialog onClose={() => setPorts(false)} />}
+        {/* What plugins add — the built-in `ports` plugin's `Ports`
+            (`plugins/ports/`): a tool rather than a way out, but wanted as
+            rarely and at the same moment — when something says a port is
+            already in use. */}
+        {pluginItems.map((item) => {
+          const Icon = PLUGIN_ICON_COMPONENTS[item.icon]
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={cn(ACTION, "group font-medium text-foreground/80")}
+              title={item.title}
+              onClick={() => void runPluginButton(item)}
+            >
+              <Icon className="size-3 shrink-0 transition-transform group-hover:scale-110" />
+              {item.label}
+            </button>
+          )
+        })}
         {usage && <Divider />}
         <span className="flex items-center pr-1">
           <UpdatePill />

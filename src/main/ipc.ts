@@ -240,7 +240,7 @@ export function createIpc(host: Host): {
   /** Both kinds of `fs.watch` — the tree's and the `Changes` list's. */
   watchers: { closeAll: () => void }
   noteFilePath: (fileName: string) => string
-  pluginFilePath: (id: string, file: PluginFile) => string
+  pluginFilePath: (id: string, file: PluginFile) => Promise<string>
   /** Flushed on quit, so the last minutes before it are counted. */
   telemetry: Telemetry
 } {
