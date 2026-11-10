@@ -6,6 +6,7 @@ import {
 import { useT, type MessageKey } from "@/lib/i18n"
 import { PanelHeader, type Fold } from "./panel-header"
 import { ProjectsSection } from "./project/projects-section"
+import { PluginsSection } from "./plugins-section"
 import { SearchSection } from "./search-section"
 
 /**
@@ -51,6 +52,17 @@ export function WorkspaceSidebar({
         className="flex h-full min-h-0 flex-col overflow-hidden"
       >
         <SearchSection />
+      </nav>
+    )
+  }
+
+  if (view === "plugins") {
+    return (
+      <nav
+        aria-label={t("nav.plugins.title")}
+        className="flex h-full min-h-0 flex-col overflow-hidden"
+      >
+        <PluginsSection />
       </nav>
     )
   }

@@ -48,6 +48,51 @@ export type PluginRailButton = {
   run: () => void | Promise<void>
 }
 
+/** A position in the text a linter was handed: 1-based line and column, the
+ * way ESLint, tsserver and every other linter count. */
+export type PluginTextPosition = { line: number; column: number }
+
+/**
+ * One problem a plugin's linter found, as the editor draws it.
+ *
+ * Positions rather than CodeMirror offsets so a plugin never has to hold an
+ * editor — it is handed text and answers about text — and `fixes` as edits to
+ * that same text, by offset, which the editor applies only while the document
+ * is still the one that was linted.
+ */
+export type PluginDiagnostic = {
+  from: PluginTextPosition
+  /** Absent for a point — a parse error has no extent. */
+  to?: PluginTextPosition
+  severity: "error" | "warning" | "info" | "hint"
+  message: string
+  /** Shown after the message — `eslint(no-unused-vars)`. */
+  source?: string
+  fixes?: {
+    name: string
+    edits: { from: number; to: number; insert: string }[]
+  }[]
+}
+
+/** A source of squiggles in the file editor, for files with one of
+ * `extensions`. */
+export type PluginLinter = {
+  id: string
+  pluginId: string
+  name: string
+  /** Lower case, no dot. */
+  extensions: string[]
+  /**
+   * What is wrong with `text`, the editor's buffer for `path`. Null for "no
+   * answer this time" — a timeout, a crash — which keeps what is drawn rather
+   * than wiping it; an empty list is "nothing is wrong".
+   */
+  lint: (input: {
+    path: string
+    text: string
+  }) => Promise<PluginDiagnostic[] | null>
+}
+
 /** What `main.js` has to export as its default. */
 export type PluginModule<App> = {
   onload: (app: App) => void | Promise<void>
@@ -58,6 +103,7 @@ export class PluginRegistry {
   private readonly disposers = new Map<string, (() => void)[]>()
   private readonly chatMenuItems = new Map<string, PluginChatMenuItem>()
   private readonly railButtons = new Map<string, PluginRailButton>()
+  private readonly linters = new Map<string, PluginLinter>()
   private readonly modules = new Map<string, PluginModule<unknown>>()
   private readonly listeners = new Set<() => void>()
 
@@ -134,6 +180,42 @@ export class PluginRegistry {
   /** Every rail button, in the order they were added. */
   railButtonList(): PluginRailButton[] {
     return [...this.railButtons.values()]
+  }
+
+  addLinter(
+    pluginId: string,
+    linter: {
+      id: string
+      name: string
+      extensions: string[]
+      lint: PluginLinter["lint"]
+    }
+  ): void {
+    if (typeof linter?.lint !== "function") {
+      throw new Error("A linter needs a `lint` function.")
+    }
+    if (!Array.isArray(linter.extensions)) {
+      throw new Error("A linter needs the `extensions` it reads.")
+    }
+    const id = `${pluginId}:${String(linter.id)}`
+    this.linters.set(id, {
+      id,
+      pluginId,
+      name: String(linter.name || linter.id),
+      extensions: linter.extensions.map((extension) =>
+        String(extension).toLowerCase().replace(/^\./, "")
+      ),
+      lint: linter.lint,
+    })
+    this.track(pluginId, () => {
+      if (this.linters.get(id)?.lint === linter.lint) this.linters.delete(id)
+    })
+    this.changed()
+  }
+
+  /** Every linter, in the order they were added. */
+  linterList(): PluginLinter[] {
+    return [...this.linters.values()]
   }
 
   isLoaded(pluginId: string): boolean {

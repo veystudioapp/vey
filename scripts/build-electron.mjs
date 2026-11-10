@@ -103,6 +103,9 @@ const rest = {
     // The agent daemon: a separate process (see src/main/daemon.ts), so it
     // gets its own bundle rather than living inside main.cjs.
     daemon: "src/main/daemon.ts",
+    // A project's ESLint runs in a process of its own (see src/main/eslint.ts)
+    // started from this file.
+    "eslint-worker": "src/main/eslint-worker.ts",
   },
 }
 

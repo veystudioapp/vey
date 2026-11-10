@@ -5,12 +5,13 @@ import {
   type Chat,
   type ChatEvent,
 } from "@shared/api"
+import type { EslintResult } from "@shared/eslint"
 import type { PluginManifest } from "@shared/plugins"
 import { useFiles } from "@/lib/files/store"
 import { useStudio } from "@/lib/store"
 import { useChats } from "@/lib/chat/store"
 
-import type { PluginIcon, PluginRegistry } from "./registry"
+import type { PluginIcon, PluginLinter, PluginRegistry } from "./registry"
 
 /** A chat as a plugin sees it. */
 export type PluginChat = {
@@ -80,6 +81,24 @@ export type PluginApp = {
   /** Opens a file of the workspace in a tab. */
   openFile: (path: string) => Promise<void>
 
+  editor: {
+    /**
+     * Squiggles in the file editor for files with one of `extensions`: `lint`
+     * is handed the buffer, unsaved edits and all, a moment after typing
+     * stops, and its answer is drawn with hover messages and quick fixes.
+     * Every open editor re-lints when one is added or taken away.
+     */
+    addLinter: (linter: Omit<PluginLinter, "pluginId">) => void
+  }
+
+  /**
+   * The project's own ESLint, run in main (`main/eslint.ts`) — a plugin has
+   * no Node of its own to run it in. `text` is linted as the file at `path`.
+   */
+  eslint: {
+    lint: (path: string, text: string) => Promise<EslintResult | null>
+  }
+
   chats: {
     list: () => PluginChat[]
     get: (chatId: string) => PluginChat | null
@@ -128,6 +147,14 @@ export function createPluginApp(
         path: folder.path,
       })),
     openFile: (path) => useFiles.getState().open(path),
+
+    editor: {
+      addLinter: (linter) => registry.addLinter(id, linter),
+    },
+
+    eslint: {
+      lint: (path, text) => window.desktop.eslintLint(path, text),
+    },
 
     chats: {
       list: () => useChats.getState().chats.map(pluginChatOf),

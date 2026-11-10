@@ -48,8 +48,7 @@ section("the dictionaries agree")
 section("translate")
 check(
   "fills a placeholder",
-  translate("vi", "settings.plugins.updated", { name: "X" }) ===
-    "Đã cập nhật X."
+  translate("vi", "nav.plugins.updated", { name: "X" }) === "Đã cập nhật X."
 )
 check(
   "leaves an unfilled placeholder showing",

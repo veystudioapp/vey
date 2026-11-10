@@ -8,8 +8,6 @@ export const settings: Messages["settings"] = {
     appearanceBlurb: "Studio trông như thế nào.",
     tabs: "Tab & trình soạn thảo",
     tabsBlurb: "Dải tab và trình soạn thảo.",
-    plugins: "Plugin",
-    pluginsBlurb: "Mã của riêng bạn, chạy trong studio.",
     updates: "Cập nhật",
     updatesBlurb: "Phiên bản, cập nhật và số liệu sử dụng.",
   },
@@ -52,16 +50,6 @@ export const settings: Messages["settings"] = {
     allProjectTabsDescription: "Tắt: chỉ dự án bạn đang làm.",
     gitBlame: "Hiện người sửa dòng gần nhất",
     gitBlameDescription: "Git blame sau dòng hiện tại, giống GitLens.",
-  },
-  plugins: {
-    warning:
-      "Plugin chạy bên trong studio với cùng quyền truy cập như studio — file, terminal và chat của bạn. Plugin có sẵn đi kèm ứng dụng; chỉ bật plugin khác nếu bạn tự viết hoặc tin tưởng nó.",
-    installFolder: "Cài từ thư mục…",
-    installZip: "Cài từ .zip…",
-    installHint:
-      "Plugin là một thư mục có manifest.json và main.js. Cài lại cùng id sẽ cập nhật nó.",
-    updated: "Đã cập nhật {name}.",
-    installed: "Đã cài {name}. Bật nó lên để chạy.",
   },
   updates: {
     version: "Phiên bản",

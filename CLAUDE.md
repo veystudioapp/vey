@@ -181,6 +181,15 @@ imports may reach `electron`.
   (`test/ports.ts`).
 - **`tsserver.ts`** — one per Explorer root, using _that root's own_
   `typescript`, and nothing if it has none.
+- **`eslint.ts` + `eslint-worker.ts`** — the project's own ESLint for the
+  built-in `eslint` plugin's squiggles (`IPC.eslintLint`, `app.eslint.lint`):
+  the nearest `node_modules/eslint` up to the folder, run where the nearest
+  `eslint.config.*` is, in a worker process per installation (its own esbuild
+  entry) — a config is the project's code. No config, no lint. The squiggles
+  are drawn by the app, not the plugin: `app.editor.addLinter` →
+  `lib/plugins/editor-lint.ts`, so no plugin bundles CodeMirror
+  (`test/eslint.ts`, `test/plugin-lint.ts`; `docs/design.md` § ESLint, the
+  third).
 - **`mcp-servers.ts`** — which MCP servers the user's own `claude` has, asked of
   it over the SDK's control channel (`mcpServerStatus()`) in a project's own
   directory, for the composer's MCP dialog (`chat/chat-mcp.tsx` — there is
@@ -307,8 +316,9 @@ learnings…`, its dialog, `main/learnings.ts`, `shared/learnings.ts` and the
   may import the renderer's **pure** modules and nothing stateful or heavy;
   what it needs from the app comes through `PluginApp`, and React is **the
   app's own** (`lib/plugins/shared-modules.ts`, rewritten at build). **Chat
-  export** (`plugins/chat-export/`, the chat row's export items) and the
-  **usage dashboard** (`plugins/usage/`, the rail's `Usage` button) are built-in
+  export** (`plugins/chat-export/`, the chat row's export items), the
+  **usage dashboard** (`plugins/usage/`, the rail's `Usage` button) and
+  **ESLint** (`plugins/eslint/`, the editor's squiggles) are built-in
   plugins. `docs/design.md` § Plugins has the argument.
 
 - **There is no Vey Pro** — the app is free, all of it: every account, every
@@ -472,9 +482,10 @@ dialog`), not by hand. Vite's root is `src/renderer`, so `index.html` and
 `public/` are there too.
 
 The shape, in one pass: the **left column** (`workspace-sidebar.tsx`) shows
-either its sections or **Search** (`SidebarView` in `lib/projects.ts`, switched
-by picking a project in the `NavRail`, its Search button and `⇧⌘F`;
-`search-section.tsx`). Its sections are
+its sections, **Search** or **Plugins** (`SidebarView` in `lib/projects.ts`,
+switched by picking a project in the `NavRail`, its Search and Plugins buttons
+and `⇧⌘F`; `search-section.tsx`, `plugins-section.tsx` — there is no Settings ›
+Plugins any more). Its sections are
 `Projects` and nothing else — `SIDEBAR_SECTIONS` in `lib/projects.ts` is
 the one line saying which sections are drawn, and the next to arrive is an id
 added to it. It stacked three once: the **Database and API panels are deleted**,
@@ -554,7 +565,7 @@ taking a key that belongs to CodeMirror everywhere else.
 The **right-hand panel** is Explorer, with `All files` and `Git` tabs, and it
 is the whole height of its column. The window is a **canvas with cards**: a
 full-width title bar (`WindowTitleBar` — no crumb, a centred `Run a command`
-field for the palette), then the `NavRail` (the projects, then Search,
+field for the palette), then the `NavRail` (the projects, then Search, Plugins,
 Terminal, Settings), the chats column, the pane + dock and the
 Explorer, each a card (`CARD`, an inward outline so collapsed sizes stay exact)
 with the gaps as resize handles (`Gap`). **Explorer collapses to nothing**,

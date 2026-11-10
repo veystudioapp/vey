@@ -6,6 +6,7 @@
  * frontend reaches it through the `@shared` alias.
  */
 
+import type { EslintResult } from "./eslint"
 import type { PluginInfo, PluginInstall, PluginSource } from "./plugins"
 import type {
   BrowserActivity,
@@ -2629,6 +2630,14 @@ export type DesktopApi = {
   tsUnused: (filePath: string) => Promise<TsSpan[] | null>
 
   /**
+   * The editor's buffer, linted by the project's own ESLint as the file at
+   * `filePath` — see `main/eslint.ts`. Reached through the built-in `eslint`
+   * plugin (`app.eslint.lint`), which draws the answer. Null when no answer
+   * came in time: "keep what is drawn".
+   */
+  eslintLint: (filePath: string, text: string) => Promise<EslintResult | null>
+
+  /**
    * Every file in the workspace, for the search palette.
    *
    * A walk, not a read, and the only call here that is: `⌘P` has to answer for
@@ -3464,6 +3473,7 @@ export const IPC = {
   tsHover: "ts:hover",
   tsDefinition: "ts:definition",
   tsUnused: "ts:unused",
+  eslintLint: "eslint:lint",
   agentModels: "agent:models",
   agentCommands: "agent:commands",
   installedMcpServers: "mcp:installed",

@@ -7,8 +7,6 @@ export const settings = {
     appearanceBlurb: "How the studio looks.",
     tabs: "Tabs & editor",
     tabsBlurb: "The tab strip and the editor.",
-    plugins: "Plugins",
-    pluginsBlurb: "Code of your own, run in the studio.",
     updates: "Updates",
     updatesBlurb: "Version, updates and usage counts.",
   },
@@ -51,16 +49,6 @@ export const settings = {
     allProjectTabsDescription: "Off: only the project you are working in.",
     gitBlame: "Show who last changed the line",
     gitBlameDescription: "Git blame after the current line, like GitLens.",
-  },
-  plugins: {
-    warning:
-      "A plugin runs inside the studio with the same access the studio has — your files, your terminals, your chats. Built-in plugins come with the app; switch on others only if you wrote or trust them.",
-    installFolder: "Install from folder…",
-    installZip: "Install from .zip…",
-    installHint:
-      "A plugin is a folder with a manifest.json and a main.js. Installing the same id again updates it.",
-    updated: "Updated {name}.",
-    installed: "Installed {name}. Switch it on to run it.",
   },
   updates: {
     version: "Version",

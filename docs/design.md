@@ -71,8 +71,10 @@ with the dock under it, and the Explorer. The gaps between
 cards are the resize handles; a card's edge is an inward outline (`CARD`) so
 collapsed sizes stay exact.
 
-- **The left column** shows either its sections or **Search** (`SidebarView`,
-  `⇧⌘F`). `SIDEBAR_SECTIONS` draws `Projects` and nothing else.
+- **The left column** shows its sections, **Search** (`⇧⌘F`) or **Plugins**
+  (`SidebarView`). Plugins was a page of Settings; it moved to the rail because
+  a plugin is something the studio does rather than how it looks, and the
+  switch for the editor's ESLint wants to be one click from the editor. `SIDEBAR_SECTIONS` draws `Projects` and nothing else.
 - **The right column is the Explorer**, its whole height. `⌘B` or the title
   bar's toggle closes it to nothing; the chats column closes to nothing too,
   since the projects in the rail are its way back.
@@ -1160,12 +1162,12 @@ is `workspace/plugins/<id>/`, and a plugin there is **off until switched on**
 (`plugins.enabled`). Two lists rather than one of everything on, so a built-in
 plugin a later update adds starts on without anybody's saved list naming it. A
 user's folder cannot take a built-in id (`listAllPlugins`). A built-in plugin
-carries an **official** badge (`OfficialBadge`) in Settings and the palette —
+carries an **official** badge (`OfficialBadge`) in the Plugins view and the palette —
 read off which folder main found it in, never off the manifest's `author`,
 which any plugin could fill in.
 
-**A plugin made outside the app is installed, not dropped in.** Settings ›
-Plugins has `Install from folder…` and `Install from .zip…`
+**A plugin made outside the app is installed, not dropped in.** The Plugins
+view has `Install from folder…` and `Install from .zip…`
 (`main/plugin-install.ts`), and the marketplace, when there is one, will
 download an archive and hand it to the same `installPlugin`. An install
 **copies three files** — `manifest.json`, `main.js`, `styles.css`, the ones
@@ -1205,7 +1207,7 @@ so it can reach `window.desktop` — terminals included — whatever `PluginApp`
 leaves out. The narrow API buys stability and registrations that undo
 themselves (`lib/plugins/registry.ts`: everything added through `PluginApp`
 is taken back, newest first, when the plugin is switched off or its `onload`
-throws), not containment. Settings says so in a standing line rather than a
+throws), not containment. The Plugins view says so in a standing line rather than a
 confirm clicked through once. Real isolation — a sandboxed `iframe` per plugin
 on its own origin, talking `postMessage` — is the next step if plugins are ever
 installed from somewhere other than the user's own hands.
@@ -1268,6 +1270,54 @@ plugin's directory (`pluginFileOf`). Plugins load in the studio's window only; a
 popped-out chat is a second page and a plugin started in both would answer every
 event twice. An example of a user's plugin, in plain JavaScript, is
 `examples/plugins/chat-counter/`.
+
+### ESLint, the third
+
+`plugins/eslint/` draws the project's own ESLint in the file editor: squiggles
+on `.js`/`.ts` and their family, the message and rule on hover, and the rule's
+autofix and suggestions as the tooltip's buttons. It brings the squiggles back
+that leaving Monaco cost (§ The editor) — for lint, not for type errors — and it
+is a plugin so that it can be switched off: a lint nobody wants is a process per
+project and a red line under work in progress.
+
+It needed two things a plugin cannot do for itself, and both went into the
+platform rather than the plugin.
+
+- **A way into the editor that is not CodeMirror.** `app.editor.addLinter`
+  takes extensions and a `lint({ path, text })` answering with 1-based
+  positions and fixes as offsets into that text
+  (`PluginDiagnostic`). The app turns them into marks
+  (`lib/plugins/editor-lint.ts`, on every file editor whether or not a linter
+  is registered, so one switched on reaches tabs already open). A plugin
+  bundling `@codemirror/lint` would be a second copy of the view package — the
+  trap CLAUDE.md warns about — and a user's plugin cannot be expected to match
+  the app's CodeMirror version. A fix applies only while the buffer is the one
+  that was linted; past a keystroke its offsets point elsewhere, and the next
+  lint brings a fresh one. A linter answering null (no answer in time) keeps
+  its marks rather than wiping them.
+- **Node.** A plugin is a page module with no process of its own, so ESLint
+  runs in main (`main/eslint.ts`, `IPC.eslintLint`) and the plugin reaches it as
+  `app.eslint.lint`. The runner is the capability, the plugin the policy — which
+  files, how a message reads, what a fix is called. A main-side half for
+  plugins in general was the alternative and was not taken: it would give a
+  user's plugin Node, which is a much larger door than `window.desktop`.
+
+The runner makes `tsserver.ts`'s bargain, stricter. **The project's own ESLint
+or nothing**: a config resolves its plugins against the project's
+`node_modules`, so a copy inside the app would not find them, and ESLint 9
+cannot read the `.eslintrc` an ESLint 8 project is written in. The nearest
+`node_modules/eslint` from the file up to its workspace folder (a monorepo
+installing per package is common), run where the nearest `eslint.config.*` is,
+or from the install for an `.eslintrc`; no config at all is no lint, since an
+`eslint` hoisted in by somebody else's dependencies is not a project asking to
+be linted. **In a process** — `eslint-worker.ts`, its own esbuild entry, one per
+installation on Electron-as-Node: a config is the project's code, run, and a
+type-aware rule set builds a whole program before its first answer; either in
+main is a frozen studio. Its stdout is the protocol, so every `console` method
+in it writes to stderr. An instance is rebuilt when a config file's mtime moves,
+so editing `eslint.config.js` does not need a restart. A config that throws is
+one mark at line 1 saying why, rather than silence. `test/eslint.ts` runs it
+against this repository's own config; `test/plugin-lint.ts` checks the rest.
 
 ## MCP: what the user's own `claude` has
 
@@ -1655,7 +1705,8 @@ grounds that the edit was deliberate; but × is also how an experiment is thrown
 away, and writing somebody's source because they closed the tab kept edits they
 meant to drop. A preview tab replaced by the next click still writes, since
 nobody closed it. The cost of leaving Monaco: `.ts` files get no syntax
-squiggles.
+squiggles from the editor itself — a project with ESLint gets its parse errors
+back through the ESLint plugin (§ ESLint, the third).
 
 ### Editing a picture
 
@@ -1691,7 +1742,8 @@ marks `reportsUnnecessary` (unused imports, locals, parameters, unreachable
 code), from the semantic list and the suggestion list both, since
 `noUnusedLocals` decides which one carries them (`IPC.tsUnused`). Asked after
 each sync lands, applied only if the buffer still holds the text synced. The
-rest of the diagnostics stay out — still no squiggles.
+rest of the diagnostics stay out — the only squiggles are ESLint's, through
+its plugin (§ ESLint, the third).
 
 ## The block editor
 

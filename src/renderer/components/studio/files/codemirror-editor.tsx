@@ -28,6 +28,7 @@ import {
   syncFile,
   typeScriptFeatures,
 } from "@/lib/files/typescript"
+import { pluginLinting } from "@/lib/plugins/editor-lint"
 import { useSettings } from "@/lib/settings"
 
 import { mountBlameCard } from "./blame-card"
@@ -115,6 +116,8 @@ export default function CodeMirrorFileEditor({
         syncFile(initial.path, text)
       }),
       servesTypeScript(initial.path) ? typeScriptFeatures(initial.path) : [],
+      // What plugins lint the file with — the built-in ESLint among them.
+      pluginLinting(initial.path),
     ]
 
     const view = new EditorView({

@@ -27,14 +27,19 @@ export type SidebarSection = "projects"
 export const SIDEBAR_SECTIONS: SidebarSection[] = ["projects"]
 
 /**
- * What the left column is showing: its sections, or the workspace's Search.
+ * What the left column is showing: its sections, the workspace's Search, or
+ * the plugins (`plugins-section.tsx`, once a page of Settings).
  *
  * One or the other rather than Search stacked as a section, which is the
  * editors' activity bar: a search's results are a list as long as the projects'
  * and as worth the whole height, and two of them sharing it evenly would halve
  * both. The `NavRail` button for each is the switch.
  */
-export type SidebarView = "projects" | "search"
+export type SidebarView = "projects" | "search" | "plugins"
+
+function isSidebarView(value: unknown): value is SidebarView {
+  return value === "projects" || value === "search" || value === "plugins"
+}
 
 type RememberedColumn = {
   sidebar: boolean
@@ -231,7 +236,7 @@ export const useProjects = create<ProjectsState>((set, get) => {
             activeFolderId: stored.activeFolderId ?? null,
             shutSections: stored.shutSections ?? [],
             shutCheckouts: stored.shutCheckouts ?? [],
-            view: stored.view === "search" ? "search" : "projects",
+            view: isSidebarView(stored.view) ? stored.view : "projects",
           })
         }
       })()

@@ -42,7 +42,7 @@ export type PluginManifest = {
 }
 
 /**
- * One directory under `plugins/`, as the Settings list draws it.
+ * One directory under `plugins/`, as the rail's Plugins view draws it.
  *
  * A directory whose manifest could not be read is still listed, with `error`,
  * rather than left out: a plugin somebody just dropped in that silently does

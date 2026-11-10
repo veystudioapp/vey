@@ -13,14 +13,15 @@ import { exposeSharedModules } from "./shared-modules"
 import {
   PluginRegistry,
   type PluginChatMenuItem,
+  type PluginLinter,
   type PluginRailButton,
 } from "./registry"
 
 /**
  * The plugins: which are on disk, which are switched on, and running them.
  *
- * A plugin of the user's is off until somebody switches it on in Settings ›
- * Plugins — it is code with the whole of this window's reach (`lib/plugins/app.ts`
+ * A plugin of the user's is off until somebody switches it on in the rail's
+ * Plugins view — it is code with the whole of this window's reach (`lib/plugins/app.ts`
  * says why that is not narrowed), so running one is a decision, never a
  * default. A **built-in** one is the other way round: it is a feature the app
  * has always had, moved into a plugin, and it is on until switched off.
@@ -55,6 +56,8 @@ type PluginsState = {
   status: Record<string, PluginStatus>
   chatMenuItems: PluginChatMenuItem[]
   railButtons: PluginRailButton[]
+  /** Read by every file editor as it lints — `lib/plugins/editor-lint.ts`. */
+  linters: PluginLinter[]
   notices: PluginNotice[]
 
   /** Lists the directory and starts every plugin switched on. Once, at launch. */
@@ -88,6 +91,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
     set({
       chatMenuItems: registry.chatMenuList(),
       railButtons: registry.railButtonList(),
+      linters: registry.linterList(),
     })
   )
 
@@ -173,6 +177,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
     status: {},
     chatMenuItems: [],
     railButtons: [],
+    linters: [],
     notices: [],
 
     async restore() {

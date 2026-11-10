@@ -1,0 +1,7 @@
+{
+  "id": "eslint",
+  "name": "ESLint",
+  "version": "1.0.0",
+  "description": "Squiggles and quick fixes in the editor from the project's own ESLint and its config.",
+  "author": "Vey"
+}

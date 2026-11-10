@@ -120,6 +120,7 @@ import { PLUGIN_DATA_DIR, PLUGINS_DIR, Store, WORKSPACE_DIR } from "./store"
 import { installedShells } from "./shells"
 import { TerminalManager } from "./terminal"
 import { TsServers } from "./tsserver"
+import { EslintServers } from "./eslint"
 import {
   checkForUpdate,
   downloadUpdate,
@@ -235,6 +236,7 @@ export function createIpc(host: Host): {
   allChats: Chats
   terminals: TerminalManager
   tsServers: TsServers
+  eslintServers: EslintServers
   /** Both kinds of `fs.watch` — the tree's and the `Changes` list's. */
   watchers: { closeAll: () => void }
   noteFilePath: (fileName: string) => string
@@ -1132,6 +1134,7 @@ export function createIpc(host: Host): {
       : dir
 
     tsServers.stopUnder(dir)
+    eslintServers.stopUnder(dir)
     watchers.closeAll()
     for (let attempt = 0; ; attempt += 1) {
       const failed = await removeWorktree(repo, dir)
@@ -1734,6 +1737,20 @@ export function createIpc(host: Host): {
   )
 
   /*
+   * The project's own ESLint, in a worker per installation — see
+   * `main/eslint.ts`. Gated like the tsserver calls: it is a file's text handed
+   * to a process to read, with the path deciding which project's code runs.
+   */
+  const eslintServers = new EslintServers(
+    async () => (await fileRoots()).map((root) => root.path),
+    path.join(__dirname, "eslint-worker.cjs")
+  )
+
+  handle(IPC.eslintLint, async (_event, filePath: string, text: string) =>
+    eslintServers.lint(await inWorkspace(filePath), text)
+  )
+
+  /*
    * The tree follows the disk while it is open — see `main/watch.ts` for why
    * this watches the expanded directories and nothing above or below them.
    */
@@ -2117,6 +2134,7 @@ export function createIpc(host: Host): {
     allChats,
     terminals,
     tsServers,
+    eslintServers,
     watchers,
     /** For the `note-file://` handler, which is not an IPC call and so cannot
      * reach the store any other way — see `serveNoteFiles`. */

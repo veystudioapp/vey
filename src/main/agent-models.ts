@@ -7,7 +7,6 @@ import { apiEnvFor } from "./claude-api"
 import { claudeBinary } from "./claude-bin"
 import { accountEnv } from "./claude-profiles"
 import { locate, spawnEnvironment } from "./shell-env"
-
 /**
  * Which models the user's own `claude` will answer on.
  *

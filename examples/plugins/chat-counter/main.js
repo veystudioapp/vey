@@ -1,5 +1,5 @@
 /**
- * An example plugin: Settings › Plugins › Install from folder…, pick this
+ * An example plugin: the rail's Plugins › Install from folder…, pick this
  * folder, and switch it on. Installing it again after an edit updates it.
  *
  * `onload` is handed the app — `PluginApp` in `src/renderer/lib/plugins/app.ts`.

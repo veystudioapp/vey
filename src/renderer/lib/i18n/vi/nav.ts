@@ -5,6 +5,8 @@ export const nav: Messages["nav"] = {
     window: "Cửa sổ",
     search: "Tìm trong tệp và chat",
     hideSearch: "Ẩn tìm kiếm",
+    plugins: "Plugin",
+    hidePlugins: "Ẩn plugin",
     terminal: "Terminal",
     pluginFailed: "{label} bị lỗi: {error}",
   },
@@ -226,5 +228,17 @@ export const nav: Messages["nav"] = {
   },
   rename: {
     renaming: "Đang đổi tên…",
+  },
+  plugins: {
+    title: "Plugin",
+    empty: "Không có plugin nào.",
+    warning:
+      "Plugin chạy bên trong studio với cùng quyền truy cập như studio — file, terminal và chat của bạn. Plugin có sẵn đi kèm ứng dụng; chỉ bật plugin khác nếu bạn tự viết hoặc tin tưởng nó.",
+    installFolder: "Cài từ thư mục…",
+    installZip: "Cài từ .zip…",
+    installHint:
+      "Plugin là một thư mục có manifest.json và main.js. Cài lại cùng id sẽ cập nhật nó.",
+    updated: "Đã cập nhật {name}.",
+    installed: "Đã cài {name}. Bật nó lên để chạy.",
   },
 }

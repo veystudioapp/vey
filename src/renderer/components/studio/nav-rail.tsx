@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Search, Settings, SquareTerminal } from "lucide-react"
+import { Puzzle, Search, Settings, SquareTerminal } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { t as translate, useT } from "@/lib/i18n"
@@ -40,6 +40,7 @@ export function NavRail({
   const view = useProjects((state) => state.view)
   const toggleView = useProjects((state) => state.toggleView)
   const searching = column && view === "search"
+  const browsingPlugins = column && view === "plugins"
   const dockOpen = useDock((state) => state.open)
   const pluginButtons = usePlugins((state) => state.railButtons)
   const toggleDock = useDock((state) => state.toggle)
@@ -64,6 +65,17 @@ export function NavRail({
         }}
       >
         <Search />
+      </RailButton>
+
+      {/* The plugins, in the left column as Search is — a view with a pressed
+          state, so it sits with Search rather than with the plugins' own
+          buttons below, which run something and have none. */}
+      <RailButton
+        label={t(browsingPlugins ? "nav.rail.hidePlugins" : "nav.rail.plugins")}
+        pressed={browsingPlugins}
+        onClick={() => toggleView("plugins")}
+      >
+        <Puzzle />
       </RailButton>
 
       {/* What plugins add, at the foot beside Settings rather than under
