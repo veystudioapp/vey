@@ -10,7 +10,6 @@ import {
   themeConf,
 } from "@/lib/editor"
 import { conflictResolution } from "@/lib/editor-conflicts"
-import { gitBlame, gitBlameConf } from "@/lib/editor-git-blame"
 import { languageExtension, languageForFile } from "@/lib/editor-languages"
 import {
   acquireDoc,
@@ -28,10 +27,8 @@ import {
   syncFile,
   typeScriptFeatures,
 } from "@/lib/files/typescript"
+import { pluginLineAnnotation } from "@/lib/plugins/editor-line-annotation"
 import { pluginLinting } from "@/lib/plugins/editor-lint"
-import { useSettings } from "@/lib/settings"
-
-import { mountBlameCard } from "./blame-card"
 
 /**
  * One open file, in CodeMirror.
@@ -70,7 +67,6 @@ export default function CodeMirrorFileEditor({
   const viewRef = useRef<EditorView | null>(null)
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
-  const blameOn = useSettings((state) => state.gitBlame)
 
   // Through refs so the editor is built once: a fresh `onChange` identity from
   // the parent's render must never tear down a buffer being typed into.
@@ -79,7 +75,7 @@ export default function CodeMirrorFileEditor({
     handlers.current = { onChange, onSave }
   }, [onChange, onSave])
 
-  const initialRef = useRef({ path, initialText, isDark, blameOn })
+  const initialRef = useRef({ path, initialText, isDark })
 
   useEffect(() => {
     const host = hostRef.current
@@ -104,9 +100,9 @@ export default function CodeMirrorFileEditor({
       // What the chat's composer shows as `10 lines selected` — see
       // `lib/files/editor-selection.ts`.
       selectionToChat(initial.path),
-      gitBlameConf.of(
-        initial.blameOn ? gitBlame(initial.path, mountBlameCard) : []
-      ),
+      // Who last changed the caret's line, when the built-in `git-blame`
+      // plugin is on — see `lib/plugins/editor-line-annotation.ts`.
+      pluginLineAnnotation(initial.path),
       EditorView.updateListener.of((update) => {
         if (!update.docChanged) return
         const text = update.state.doc.toString()
@@ -165,19 +161,6 @@ export default function CodeMirrorFileEditor({
       effects: themeConf.reconfigure(editorTheme(isDark)),
     })
   }, [isDark])
-
-  // Only on a change: the view was built with the setting as it stood, and a
-  // reconfigure on mount would ask git for the same blame a second time.
-  const blameWas = useRef(blameOn)
-  useEffect(() => {
-    if (blameWas.current === blameOn) return
-    blameWas.current = blameOn
-    viewRef.current?.dispatch({
-      effects: gitBlameConf.reconfigure(
-        blameOn ? gitBlame(path, mountBlameCard) : []
-      ),
-    })
-  }, [blameOn, path])
 
   return <div ref={hostRef} className="h-full w-full overflow-hidden" />
 }

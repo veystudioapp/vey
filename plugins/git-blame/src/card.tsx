@@ -26,29 +26,24 @@ import {
 
 import { Tooltip as TooltipPrimitive } from "@base-ui/react/tooltip"
 
-import type { GitLineCommit } from "@shared/api"
+import type { GitBlame, GitBlameCommit, GitLineCommit } from "@shared/api"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { useComposerBus } from "@/lib/chat/composer-bus"
-import { dateTimeOf } from "@/lib/chat/since"
-import type { BlameCard } from "@/lib/editor-git-blame"
-import { useChanges } from "@/lib/files/changes"
 import {
-  ago,
   askAboutCommit,
   commitUrl,
   fileUrl,
   issueNumbers,
   messageParts,
   provisionalOf,
-  statText,
   trailersOf,
 } from "@/lib/files/git-blame"
-import { GIT_TONES } from "@/lib/files/git-status"
-import { rootOf } from "@/lib/files/roots"
-import { useT, type Translate } from "@/lib/i18n"
+import type { Translate } from "@/lib/i18n"
+import type { PluginApp } from "@/lib/plugins/app"
 import { cn } from "@/lib/utils"
+
+import { ago, statText, type Words } from "./words"
 
 /**
  * The blame card: the commit behind the caret's line, and every commit before
@@ -59,20 +54,27 @@ import { cn } from "@/lib/utils"
  * call, so the arrows and the rows under them only change which commit the
  * card is about; nothing is asked of git per step.
  *
- * React in a CodeMirror tooltip, mounted by hand: the card's box is DOM the
- * editor builds (`lib/editor-git-blame.ts`), and this is handed in from the
- * component side so that `lib/` does not import a component. Its own root, so
- * its own `TooltipProvider` — context does not cross roots. Rendered with
- * `flushSync` so the card has its full size when the editor measures it.
+ * React in a CodeMirror tooltip, mounted by hand into the box the app's
+ * line annotation hands over (`lib/plugins/editor-line-annotation.ts`). Its
+ * own root, so its own `TooltipProvider` — context does not cross roots — and
+ * the app reached through `PluginApp` rather than its stores, of which this
+ * bundle would hold a copy. Rendered with `flushSync` so the card has its full
+ * size when the editor measures it.
  */
-export function mountBlameCard(host: HTMLElement, card: BlameCard): () => void {
+export function mountBlameCard(
+  host: HTMLElement,
+  app: PluginApp,
+  card: BlameCard
+): () => void {
   const root = createRoot(host)
   flushSync(() =>
     root.render(
       <Layer value={host}>
-        <TooltipProvider delay={400}>
-          <Card {...card} />
-        </TooltipProvider>
+        <AppContext value={app}>
+          <TooltipProvider delay={400}>
+            <Card {...card} />
+          </TooltipProvider>
+        </AppContext>
       </Layer>
     )
   )
@@ -92,6 +94,48 @@ export function mountBlameCard(host: HTMLElement, card: BlameCard): () => void {
  */
 const Layer = createContext<HTMLElement | null>(null)
 
+/** What the card is drawn from. */
+export type BlameCard = {
+  /** The file on disk — the gate the line's history is asked through. */
+  filePath: string
+  blame: GitBlame
+  commit: GitBlameCommit
+  /** The caret's line, in the buffer. */
+  line: number
+  /** The same line in `commit`, where its history starts. */
+  source: { line: number; path: string } | null
+  close: () => void
+  /** The card has grown — the history arrived — and its place is re-asked. */
+  remeasure: () => void
+}
+
+const AppContext = createContext<PluginApp | null>(null)
+
+/** The app, and its words in its language — `app.t`, never a copy of
+ * `lib/i18n`. */
+function useApp(): { app: PluginApp; t: Translate; words: Words } {
+  const app = use(AppContext)!
+  return { app, t: app.t, words: { t: app.t, locale: app.locale() } }
+}
+
+/** The two tones the line's change is drawn in — `GIT_TONES` in
+ * `lib/files/git-status.ts`, which is a store's module and not the plugin's to
+ * import. */
+const TONES = {
+  added: "text-[#007100] dark:text-[#73c991]",
+  deleted: "text-[#ad0707] dark:text-[#c74e39]",
+}
+
+/** The moment in full, for the hover — `dateTimeOf` in `lib/chat/since.ts`. */
+function dateTimeOf(iso: string): string {
+  const at = new Date(iso)
+  if (Number.isNaN(at.getTime())) return ""
+  return at.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  })
+}
+
 /** `-L`'s own cap, in `main/git.ts` — said aloud when the list reaches it. */
 const HISTORY_LIMIT = 30
 
@@ -104,7 +148,7 @@ function Card({
   close,
   remeasure,
 }: BlameCard) {
-  const t = useT()
+  const { app, t, words } = useApp()
   const [history, setHistory] = useState<GitLineCommit[] | null>(
     source ? null : []
   )
@@ -113,8 +157,8 @@ function Card({
   useEffect(() => {
     if (!source) return
     let alive = true
-    void window.desktop
-      .gitLineHistory(filePath, commit.hash, source.path, source.line)
+    void app.git
+      .lineHistory(filePath, commit.hash, source)
       .catch(() => [])
       .then((found) => {
         if (alive) setHistory(found)
@@ -122,7 +166,7 @@ function Card({
     return () => {
       alive = false
     }
-  }, [filePath, commit.hash, source])
+  }, [app, filePath, commit.hash, source])
 
   // Not on the first paint: that is measured by the tooltip opening, and asking
   // again from inside the update that creates it is asking twice.
@@ -148,8 +192,6 @@ function Card({
 
   const { webUrl } = blame
   const forge = webUrl && new URL(webUrl).hostname.replace(/\.(com|org)$/, "")
-  const root = rootOf(filePath)
-
   const { text: body, trailers } = trailersOf(selected.body)
 
   return (
@@ -172,7 +214,7 @@ function Card({
               </span>
               <span aria-hidden>·</span>
               <span className="shrink-0" title={dateTimeOf(selected.date)}>
-                {ago(selected.date)}
+                {ago(selected.date, words)}
               </span>
             </div>
           </div>
@@ -252,14 +294,13 @@ function Card({
               : []
           }
           onOpenDiff={
-            root
+            app.git.canOpenCommit(filePath)
               ? () => {
                   close()
-                  useChanges.getState().openCommitFile(root.id, {
+                  app.git.openCommitFile(filePath, {
                     hash: selected.hash,
-                    shortHash: selected.hash.slice(0, 7),
                     subject: selected.subject,
-                    path: selected.path,
+                    file: selected.path,
                     ...(selected.from === undefined
                       ? {}
                       : { from: selected.from }),
@@ -271,14 +312,14 @@ function Card({
             close()
             // Into the draft, never sent — the question is the user's to
             // write, the same bargain the terminal's `Ask about this` makes.
-            useComposerBus.getState().deliver({
-              text: askAboutCommit(
+            app.composer.insert(
+              askAboutCommit(
                 { ...selected, summary: selected.subject },
                 blame.path,
                 line,
                 index === 0
-              ),
-            })
+              )
+            )
           }}
         />
       </div>
@@ -341,7 +382,7 @@ function LineChange({
   before: string[]
   after: string[]
 }) {
-  const t = useT()
+  const { t } = useApp()
   if (before.length === 0 && after.length === 0) return null
   const rows = [
     ...before.map((text) => ({ sign: "−", text, tone: "deleted" as const })),
@@ -362,9 +403,7 @@ function LineChange({
               row.tone === "added" ? "bg-[#007100]/10" : "bg-[#ad0707]/10"
             )}
           >
-            <span
-              className={cn("w-2 shrink-0 select-none", GIT_TONES[row.tone])}
-            >
+            <span className={cn("w-2 shrink-0 select-none", TONES[row.tone])}>
               {row.sign}
             </span>
             <span className="min-w-0 truncate">{row.text || " "}</span>
@@ -386,7 +425,7 @@ function History({
   index: number
   onPick: (index: number) => void
 }) {
-  const t = useT()
+  const { t, words } = useApp()
   if (entries !== null && entries.length <= 1) return null
   return (
     <div className="border-t border-border py-2">
@@ -442,7 +481,7 @@ function History({
                   </span>
                 </span>
                 <span className="max-w-[9rem] truncate text-[0.65rem] text-muted-foreground">
-                  {entry.author} · {ago(entry.date)}
+                  {entry.author} · {ago(entry.date, words)}
                 </span>
               </button>
             </li>
@@ -526,7 +565,7 @@ function Actions({
   onOpenDiff: (() => void) | null
   onAsk: () => void
 }) {
-  const t = useT()
+  const { t, words } = useApp()
   const [copied, setCopied] = useState<"hash" | "message" | null>(null)
 
   function copy(what: "hash" | "message", text: string) {
@@ -557,13 +596,13 @@ function Actions({
       {commit.stat && (
         <span
           className="ml-1 flex items-center gap-1.5 text-[0.65rem] text-muted-foreground tabular-nums"
-          title={statText(commit.stat)}
+          title={statText(commit.stat, words)}
         >
           <span>
             {t("files.blame.fileCount", { count: commit.stat.files })}
           </span>
-          <span className={GIT_TONES.added}>+{commit.stat.added}</span>
-          <span className={GIT_TONES.deleted}>−{commit.stat.removed}</span>
+          <span className={TONES.added}>+{commit.stat.added}</span>
+          <span className={TONES.deleted}>−{commit.stat.removed}</span>
         </span>
       )}
       <span className="flex-1" />

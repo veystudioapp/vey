@@ -11,7 +11,6 @@ const ChatWindow = lazy(() =>
     default: mod.ChatWindow,
   }))
 )
-
 /**
  * The chat this window was opened for, or null for the studio itself.
  *

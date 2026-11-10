@@ -4,14 +4,25 @@ import {
   type ChatSpend,
   type Chat,
   type ChatEvent,
+  type GitBlame,
+  type GitLineCommit,
 } from "@shared/api"
 import type { EslintResult } from "@shared/eslint"
 import type { PluginManifest } from "@shared/plugins"
+import { useComposerBus } from "@/lib/chat/composer-bus"
+import { useChanges } from "@/lib/files/changes"
+import { rootOf } from "@/lib/files/roots"
 import { useFiles } from "@/lib/files/store"
+import { currentLocale, t, type Locale, type Translate } from "@/lib/i18n"
 import { useStudio } from "@/lib/store"
 import { useChats } from "@/lib/chat/store"
 
-import type { PluginIcon, PluginLinter, PluginRegistry } from "./registry"
+import type {
+  PluginIcon,
+  PluginLineAnnotator,
+  PluginLinter,
+  PluginRegistry,
+} from "./registry"
 
 /** A chat as a plugin sees it. */
 export type PluginChat = {
@@ -52,6 +63,16 @@ export type PluginApp = {
     icon?: PluginIcon
     run: () => void | Promise<void>
   }) => void
+  /**
+   * The app's own strings, in the language the app is in — for a built-in
+   * plugin, whose words are the app's (`MessageKey`). A plugin bundling
+   * `lib/i18n` would carry every message again and a locale the Settings
+   * switch never reaches.
+   */
+  t: Translate
+  /** The language the app is in, for `Intl` — `2 months ago`. */
+  locale: () => Locale
+
   /** A line in the corner of the window for a few seconds. */
   notice: (text: string) => void
   /** Anything to undo when the plugin is switched off. */
@@ -89,6 +110,13 @@ export type PluginApp = {
      * Every open editor re-lints when one is added or taken away.
      */
     addLinter: (linter: Omit<PluginLinter, "pluginId">) => void
+    /**
+     * Faint words after the caret's line, and a card behind them on hover —
+     * GitLens's current-line blame. Only the first one added is drawn.
+     */
+    addLineAnnotation: (
+      annotator: Omit<PluginLineAnnotator, "pluginId">
+    ) => void
   }
 
   /**
@@ -98,6 +126,31 @@ export type PluginApp = {
   eslint: {
     lint: (path: string, text: string) => Promise<EslintResult | null>
   }
+
+  /** What git says about a file of the workspace — see `main/git.ts`. */
+  git: {
+    /** Who last changed each line of `text`, the buffer of `path`. */
+    blame: (path: string, text: string) => Promise<GitBlame | null>
+    /** Every commit that changed one line, newest first, from `hash` back —
+     * `git log -L`. `source` is the line as `hash` has it. */
+    lineHistory: (
+      path: string,
+      hash: string,
+      source: { path: string; line: number }
+    ) => Promise<GitLineCommit[]>
+    /** Whether `path` is in a checkout the diff tab can open a commit of. */
+    canOpenCommit: (path: string) => boolean
+    /** One file of one commit in the checkout's diff tab. `file` is the
+     * repository's `/`-separated path; `from` its path before a rename. */
+    openCommitFile: (
+      path: string,
+      commit: { hash: string; subject: string; file: string; from?: string }
+    ) => void
+  }
+
+  /** Types into the composer of the chat on screen — a new one in the
+   * project when none is — unsent: the question is still the user's. */
+  composer: { insert: (text: string) => void }
 
   chats: {
     list: () => PluginChat[]
@@ -130,6 +183,8 @@ export function createPluginApp(
     addChatMenuItem: (item) => registry.addChatMenuItem(id, item),
     addRailButton: (button) => registry.addRailButton(id, button),
     notice: (text) => notice(id, String(text)),
+    t,
+    locale: currentLocale,
     register: (dispose) => registry.track(id, dispose),
 
     loadData: async <T>() =>
@@ -150,10 +205,35 @@ export function createPluginApp(
 
     editor: {
       addLinter: (linter) => registry.addLinter(id, linter),
+      addLineAnnotation: (annotator) =>
+        registry.addLineAnnotation(id, annotator),
     },
 
     eslint: {
       lint: (path, text) => window.desktop.eslintLint(path, text),
+    },
+
+    git: {
+      blame: (path, text) => window.desktop.gitBlame(path, text),
+      lineHistory: (path, hash, source) =>
+        window.desktop.gitLineHistory(path, hash, source.path, source.line),
+      canOpenCommit: (path) => rootOf(path) !== null,
+      openCommitFile: (path, commit) => {
+        const root = rootOf(path)
+        if (!root) return
+        useChanges.getState().openCommitFile(root.id, {
+          hash: commit.hash,
+          shortHash: commit.hash.slice(0, 7),
+          subject: commit.subject,
+          path: commit.file,
+          ...(commit.from === undefined ? {} : { from: commit.from }),
+        })
+      },
+    },
+
+    composer: {
+      insert: (text) =>
+        useComposerBus.getState().deliver({ text: String(text) }),
     },
 
     chats: {

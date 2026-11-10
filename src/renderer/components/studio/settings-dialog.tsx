@@ -462,8 +462,6 @@ function previewFamily(value: string): string {
 function TabsSection() {
   const allProjectTabs = useSettings((state) => state.allProjectTabs)
   const setAllProjectTabs = useSettings((state) => state.setAllProjectTabs)
-  const gitBlame = useSettings((state) => state.gitBlame)
-  const setGitBlame = useSettings((state) => state.setGitBlame)
   const t = useT()
 
   return (
@@ -473,12 +471,6 @@ function TabsSection() {
         description={t("settings.tabs.allProjectTabsDescription")}
       >
         <Switch checked={allProjectTabs} onCheckedChange={setAllProjectTabs} />
-      </Row>
-      <Row
-        title={t("settings.tabs.gitBlame")}
-        description={t("settings.tabs.gitBlameDescription")}
-      >
-        <Switch checked={gitBlame} onCheckedChange={setGitBlame} />
       </Row>
     </Card>
   )

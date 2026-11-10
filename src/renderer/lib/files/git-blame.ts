@@ -1,9 +1,11 @@
 import type { GitBlame, GitBlameCommit, GitLineCommit } from "@shared/api"
-import { currentLocale, t, type Locale } from "../i18n"
 
 /**
- * The words the editor's blame annotation and its hover are drawn from — the
- * pure half of `lib/editor-git-blame.ts` (`test/git-blame.ts`).
+ * What the blame card and the commit lists read off a commit — pure, with no
+ * i18n and no store, so the built-in `git-blame` plugin can bundle it
+ * (`plugins/git-blame/`, `test/git-blame.ts`). The words that need the
+ * language — `2 months ago`, the annotation — are the plugin's own
+ * (`plugins/git-blame/src/words.ts`), through `app.t`.
  */
 
 /** The commit that last changed line `line` (1-based), null for one nobody has
@@ -16,49 +18,6 @@ export function commitAt(
   if (hash === undefined) return undefined
   if (hash === null) return null
   return blame.commits[hash]
-}
-
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ["year", 365 * 86_400_000],
-  ["month", 30 * 86_400_000],
-  ["week", 7 * 86_400_000],
-  ["day", 86_400_000],
-  ["hour", 3_600_000],
-  ["minute", 60_000],
-]
-
-const formats = new Map<Locale, Intl.RelativeTimeFormat>()
-function relative(): Intl.RelativeTimeFormat {
-  const locale = currentLocale()
-  let format = formats.get(locale)
-  if (!format) {
-    format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" })
-    formats.set(locale, format)
-  }
-  return format
-}
-
-/**
- * `2 months ago` — the long form, unlike the sidebar's `since`: the annotation
- * has the width of the rest of the line to spend, and it is read as a sentence.
- */
-export function ago(iso: string, now: number = Date.now()): string {
-  const at = Date.parse(iso)
-  if (Number.isNaN(at)) return ""
-  const ms = Math.max(0, now - at)
-  for (const [unit, size] of UNITS) {
-    if (ms >= size) return relative().format(-Math.floor(ms / size), unit)
-  }
-  return t("files.blame.justNow")
-}
-
-/** What sits at the end of the caret's line: `Ada, 2 months ago • fix: …`. */
-export function annotationOf(
-  commit: GitBlameCommit | null,
-  now: number = Date.now()
-): string {
-  if (!commit) return t("files.blame.notCommitted")
-  return `${commit.author}, ${ago(commit.date, now)} • ${commit.summary}`
 }
 
 /** A run of a commit message: plain text, or a `#27` the forge can open. */
@@ -131,16 +90,6 @@ export function askAboutCommit(
 ): string {
   const which = latest ? "which last changed" : "an earlier change to"
   return `About commit ${commit.hash.slice(0, 7)} ("${commit.summary}") by ${commit.author}, ${which} @${path}#L${line}: `
-}
-
-/** The size of a whole commit under its message: `3 files changed · +12 −4`. */
-export function statText(stat: GitLineCommit["stat"]): string {
-  if (!stat) return ""
-  return t("files.blame.stat", {
-    count: stat.files,
-    added: stat.added,
-    removed: stat.removed,
-  })
 }
 
 /**

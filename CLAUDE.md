@@ -139,7 +139,7 @@ imports may reach `electron`.
   `commitFileDiff` to open a commit into the checkout's one diff tab, both
   sides out of the object store; nothing written (`docs/design.md` § Commits). **`blame` is the second**, one per file
   with the editor's buffer on stdin, for the current-line annotation
-  (`lib/editor-git-blame.ts`, § Who last changed a line), and
+  (the built-in `git-blame` plugin, § Who last changed a line), and
   `lineHistory` (`git log -L`) the card's list of every commit that changed
   that line. **The `Git Graph` tab's row menu writes** —
   `checkoutDetached`, `createBranch`, `createTag`, `cherryPick`, each answering
@@ -318,8 +318,9 @@ learnings…`, its dialog, `main/learnings.ts`, `shared/learnings.ts` and the
   app's own** (`lib/plugins/shared-modules.ts`, rewritten at build). **Chat
   export** (`plugins/chat-export/`, the chat row's export items), the
   **usage dashboard** (`plugins/usage/`, the rail's `Usage` button) and
-  **ESLint** (`plugins/eslint/`, the editor's squiggles) are built-in
-  plugins. `docs/design.md` § Plugins has the argument.
+  **ESLint** (`plugins/eslint/`, the editor's squiggles) and **Git blame**
+  (`plugins/git-blame/`, the current-line annotation and its card — it was a
+  Settings switch) are built-in plugins. `docs/design.md` § Plugins has the argument.
 
 - **There is no Vey Pro** — the app is free, all of it: every account, every
   project, the custom API. The licence keys, the trial, the Polar checkout,

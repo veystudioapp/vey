@@ -343,8 +343,13 @@ export function editorTheme(isDark: boolean): Extension {
  *   source, which is the same decision made once instead of four times.
  * - **No `indentWithTab` by default.** Tab is how you leave a field, and three
  *   of these editors are fields inside forms.
+ * - **Wrapping, except where it is asked off.** A diff in a narrow pane and a
+ *   field inside a form read better wrapped; the file editor does not wrap —
+ *   see `fileChrome`.
  */
-export function baseChrome(): Extension[] {
+export function baseChrome({
+  wrap = true,
+}: { wrap?: boolean } = {}): Extension[] {
   return [
     history(),
     drawSelection(),
@@ -356,7 +361,7 @@ export function baseChrome(): Extension[] {
     highlightSelectionMatches(),
     rectangularSelection(),
     crosshairCursor(),
-    EditorView.lineWrapping,
+    wrap ? EditorView.lineWrapping : [],
     keymap.of([
       ...closeBracketsKeymap,
       ...defaultKeymap,
@@ -403,7 +408,10 @@ export function panelChrome(): Extension[] {
  */
 export function fileChrome(): Extension[] {
   return [
-    ...baseChrome(),
+    // Unwrapped, as VS Code draws code: a long line runs off to the right
+    // behind the horizontal scrollbar rather than folding under itself, so a
+    // line on screen is a line of the file and indentation still lines up.
+    ...baseChrome({ wrap: false }),
     lineNumbers(),
     foldGutter(),
     highlightActiveLine(),

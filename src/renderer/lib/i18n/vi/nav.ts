@@ -232,8 +232,6 @@ export const nav: Messages["nav"] = {
   plugins: {
     title: "Plugin",
     empty: "Không có plugin nào.",
-    warning:
-      "Plugin chạy bên trong studio với cùng quyền truy cập như studio — file, terminal và chat của bạn. Plugin có sẵn đi kèm ứng dụng; chỉ bật plugin khác nếu bạn tự viết hoặc tin tưởng nó.",
     installFolder: "Cài từ thư mục…",
     installZip: "Cài từ .zip…",
     installHint:

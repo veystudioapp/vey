@@ -1207,8 +1207,10 @@ so it can reach `window.desktop` — terminals included — whatever `PluginApp`
 leaves out. The narrow API buys stability and registrations that undo
 themselves (`lib/plugins/registry.ts`: everything added through `PluginApp`
 is taken back, newest first, when the plugin is switched off or its `onload`
-throws), not containment. The Plugins view says so in a standing line rather than a
-confirm clicked through once. Real isolation — a sandboxed `iframe` per plugin
+throws), not containment. The Plugins view said so in a standing line, and no
+longer does: with installing hidden every plugin listed is one the app ships,
+so the caution had nothing in the list to be about. It returns with the
+install buttons, as a standing line rather than a confirm clicked through once. Real isolation — a sandboxed `iframe` per plugin
 on its own origin, talking `postMessage` — is the next step if plugins are ever
 installed from somewhere other than the user's own hands.
 
@@ -1318,6 +1320,39 @@ in it writes to stderr. An instance is rebuilt when a config file's mtime moves,
 so editing `eslint.config.js` does not need a restart. A config that throws is
 one mark at line 1 saying why, rather than silence. `test/eslint.ts` runs it
 against this repository's own config; `test/plugin-lint.ts` checks the rest.
+
+### Git blame, the fourth
+
+The current-line blame (§ Who last changed a line) is `plugins/git-blame/`. It
+was a switch in Settings › Tabs & editor; the plugin's row in the Plugins view
+is that switch now, and the `gitBlame` setting is deleted. A stored
+`gitBlame: false` is not carried over — the plugin starts on, once, for
+somebody who had turned it off.
+
+The same split as ESLint's. **The editor half is the app's**,
+`app.editor.addLineAnnotation` → `lib/plugins/editor-line-annotation.ts`: the
+words laid over the line's end, asked on open, on focus and after typing
+settles, hidden while stale, the hover delays, the tooltip box. That is the old
+`lib/editor-git-blame.ts` with git taken out of it — the plugin answers a buffer
+with "what to write at line n, and the card behind it", and only the first
+annotator registered is drawn, since the end of a line has room for one
+sentence. **The git half and the card are the plugin's**: one `app.git.blame`
+per ask, read a line at a time, and the card (moved whole from
+`components/studio/files/blame-card.tsx`) mounted into the box the app hands
+over.
+
+What the card reached into the app for became `PluginApp` calls rather than
+imports, because a store bundled into a plugin is a second store:
+`git.lineHistory`, `git.openCommitFile` / `canOpenCommit` (the checkout's diff
+tab), `composer.insert` (`Ask in chat`), and **`t` / `locale`** — the app's own
+strings in the app's language. Bundling `lib/i18n` would have carried every
+message of both languages and a locale the Settings switch never reaches; the
+plugin's words (`src/words.ts`: `2 months ago`, the annotation, a commit's size)
+take `t` and the locale as arguments instead, and `lib/files/git-blame.ts` lost
+its i18n import so the pure half can be bundled. `GIT_TONES` and `dateTimeOf`
+are copied, two lines each, because their modules hold a store and a locale.
+147 KB minified, nearly all of it the base-ui tooltip the card's buttons use —
+the same bargain the usage plugin made with its dialog.
 
 ## MCP: what the user's own `claude` has
 
@@ -1616,8 +1651,9 @@ rebase, reset, revert, amend and deleting a ref stay the shell's.
 
 The caret line's blame is drawn faintly after it, with a card on hover:
 author, date, the whole message, the commit's size, the line's own `-`/`+`
-rows, hash and forge links (`lib/editor-git-blame.ts`,
-`components/studio/files/blame-card.tsx`, `main/git.ts`'s `blame`). One
+rows, hash and forge links — the built-in **`git-blame` plugin**
+(`plugins/git-blame/`, § Git blame, the fourth) over the app's line annotation
+(`lib/plugins/editor-line-annotation.ts`) and `main/git.ts`'s `blame`. One
 `git blame --porcelain` per file with the buffer on stdin, laid over the line
 rather than in it, and never cut: on a line that reaches the edge the words go
 past it, behind a horizontal scrollbar, since trimming them to the room left
@@ -1697,6 +1733,10 @@ view for `Diff | Edit`, a picture's comparison and unsaved edits.
 `lazy`. A language is a dynamic import (`lib/editor-languages.ts`, 143 via
 `@codemirror/language-data`, plus `.env` and Makefile grammars of our own). One
 copy of `@codemirror/view` is enforced twice — see `CLAUDE.md`.
+**The file editor does not wrap**, as VS Code does not: a long line runs off
+behind the horizontal scrollbar, so a row on screen is a line of the file. The
+diffs and the fields still wrap (`baseChrome({ wrap })`), being narrow panes
+read rather than code navigated.
 `lib/files/documents.ts` lets several views share one path's buffer. `⌘S` saves;
 **closing a tab with unsaved edits asks** — Save / Don't Save / Cancel
 (`files/unsaved-dialog.tsx`, `unsaved` in `lib/files/store.ts`), one dialog for

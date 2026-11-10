@@ -47,8 +47,6 @@ export const settings = {
   tabs: {
     allProjectTabs: "Show tabs from every project",
     allProjectTabsDescription: "Off: only the project you are working in.",
-    gitBlame: "Show who last changed the line",
-    gitBlameDescription: "Git blame after the current line, like GitLens.",
   },
   updates: {
     version: "Version",

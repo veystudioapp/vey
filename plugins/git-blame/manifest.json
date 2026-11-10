@@ -1,0 +1,7 @@
+{
+  "id": "git-blame",
+  "name": "Git blame",
+  "version": "1.0.0",
+  "description": "Who last changed the caret's line, after it, like GitLens — and the commit behind it, with the line's history, on hover.",
+  "author": "Vey"
+}

@@ -8,18 +8,23 @@ import { blame, lineHistory, webUrlOf } from "../src/main/git"
 import {
   ago,
   annotationOf,
+  statText,
+  type Words,
+} from "../plugins/git-blame/src/words"
+import {
   commitAt,
   fileUrl,
   issueNumbers,
   messageParts,
-  statText,
   trailersOf,
 } from "../src/renderer/lib/files/git-blame"
+import { translate } from "../src/renderer/lib/i18n"
 import { check, finish, section } from "./harness"
 
 /**
- * The editor's current-line blame — `blame` in `main/git.ts` and the words in
- * `lib/files/git-blame.ts`.
+ * The editor's current-line blame — `blame` in `main/git.ts` and the words of
+ * the built-in `git-blame` plugin (`plugins/git-blame/src/words.ts`,
+ * `lib/files/git-blame.ts`).
  *
  * Against a real repository, like `test/git-diff.ts`: what is relied on is the
  * porcelain format, and above all that a buffer handed over on stdin is blamed
@@ -187,9 +192,14 @@ for (const [remote, expected] of [
 section("words")
 
 const now = Date.parse("2026-10-08T12:00:00Z")
-check("months", ago("2026-07-10T13:15:00Z", now) === "2 months ago")
-check("yesterday", ago("2026-10-07T10:00:00Z", now) === "yesterday")
-check("seconds", ago("2026-10-08T11:59:50Z", now) === "just now")
+// The plugin is handed the app's language; here, English.
+const words: Words = {
+  t: (key, vars) => translate("en", key, vars),
+  locale: "en",
+}
+check("months", ago("2026-07-10T13:15:00Z", words, now) === "2 months ago")
+check("yesterday", ago("2026-10-07T10:00:00Z", words, now) === "yesterday")
+check("seconds", ago("2026-10-08T11:59:50Z", words, now) === "just now")
 check(
   "the annotation",
   annotationOf(
@@ -200,10 +210,14 @@ check(
       date: "2026-07-10T13:15:00Z",
       summary: "feat: x",
     },
+    words,
     now
   ) === "Ada, 2 months ago • feat: x"
 )
-check("an uncommitted line", annotationOf(null, now).includes("Not committed"))
+check(
+  "an uncommitted line",
+  annotationOf(null, words, now).includes("Not committed")
+)
 const trailed = trailersOf(
   "Why it matters.\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nSigned-off-by: Ada"
 )
@@ -232,10 +246,11 @@ check(
 )
 check(
   "a commit's size",
-  statText({ files: 3, added: 12, removed: 4 }) ===
+  statText({ files: 3, added: 12, removed: 4 }, words) ===
     "3 files changed · +12 −4" &&
-    statText({ files: 1, added: 0, removed: 2 }) === "1 file changed · +0 −2" &&
-    statText(null) === ""
+    statText({ files: 1, added: 0, removed: 2 }, words) ===
+      "1 file changed · +0 −2" &&
+    statText(null, words) === ""
 )
 
 const parts = messageParts("feat: add (#27) and #3", "https://github.com/a/b")

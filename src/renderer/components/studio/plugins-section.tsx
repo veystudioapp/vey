@@ -31,10 +31,11 @@ const SHOW_PLUGIN_INSTALL = false
  * editor, not three.
  *
  * The built-in plugins, then the ones installed from a folder or a `.zip`.
- * The warning is standing rather than a confirm on the first switch: it is
- * true of every plugin every time, and a dialog clicked through once says
- * nothing to whoever switches on the next one. An installed plugin arrives
- * **off** for the same reason — picking a folder is not the decision to run it.
+ * An installed plugin arrives **off** — picking a folder is not the decision
+ * to run it. There is no warning line: with installing hidden
+ * (`SHOW_PLUGIN_INSTALL`) every plugin listed is one the app ships, and a
+ * caution about code of unknown origin had nothing in the list to be about.
+ * It comes back with the install buttons.
  */
 export function PluginsSection() {
   const plugins = usePlugins((state) => state.plugins)
@@ -209,10 +210,6 @@ export function PluginsSection() {
             })}
           </ul>
         )}
-
-        <p className="m-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed">
-          {t("nav.plugins.warning")}
-        </p>
       </div>
     </div>
   )

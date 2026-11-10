@@ -48,8 +48,6 @@ export const settings: Messages["settings"] = {
   tabs: {
     allProjectTabs: "Hiện tab của mọi dự án",
     allProjectTabsDescription: "Tắt: chỉ dự án bạn đang làm.",
-    gitBlame: "Hiện người sửa dòng gần nhất",
-    gitBlameDescription: "Git blame sau dòng hiện tại, giống GitLens.",
   },
   updates: {
     version: "Phiên bản",

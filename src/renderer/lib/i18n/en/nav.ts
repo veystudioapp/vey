@@ -233,8 +233,6 @@ export const nav = {
   plugins: {
     title: "Plugins",
     empty: "No plugins.",
-    warning:
-      "A plugin runs inside the studio with the same access the studio has — your files, your terminals, your chats. Built-in plugins come with the app; switch on others only if you wrote or trust them.",
     installFolder: "Install from folder…",
     installZip: "Install from .zip…",
     installHint:

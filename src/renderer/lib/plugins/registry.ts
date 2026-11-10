@@ -93,6 +93,41 @@ export type PluginLinter = {
   }) => Promise<PluginDiagnostic[] | null>
 }
 
+/** What a line annotator writes after the caret's line, and the card behind
+ * the words. */
+export type PluginLineAnnotation = {
+  text: string
+  /**
+   * Draws the card shown when the words are hovered into `host`, and answers
+   * with the way to take it down. Absent for words with nothing behind them.
+   * `remeasure` is for a card that has grown — something it fetched arrived.
+   */
+  card?: (
+    host: HTMLElement,
+    context: { close: () => void; remeasure: () => void }
+  ) => () => void
+}
+
+/**
+ * Faint words after the caret's line in the file editor — what GitLens calls
+ * its current-line blame, the built-in `git-blame` plugin's.
+ */
+export type PluginLineAnnotator = {
+  id: string
+  pluginId: string
+  name: string
+  /**
+   * Asked when the editor opens, when it is focused again and a moment after
+   * typing stops, with the buffer as it stands. Answers with what to write at
+   * each line (1-based), or null for nothing in this file. An answer is drawn
+   * only while the buffer is still the text it was asked about.
+   */
+  annotate: (input: {
+    path: string
+    text: string
+  }) => Promise<((line: number) => PluginLineAnnotation | null) | null>
+}
+
 /** What `main.js` has to export as its default. */
 export type PluginModule<App> = {
   onload: (app: App) => void | Promise<void>
@@ -104,6 +139,7 @@ export class PluginRegistry {
   private readonly chatMenuItems = new Map<string, PluginChatMenuItem>()
   private readonly railButtons = new Map<string, PluginRailButton>()
   private readonly linters = new Map<string, PluginLinter>()
+  private readonly lineAnnotators = new Map<string, PluginLineAnnotator>()
   private readonly modules = new Map<string, PluginModule<unknown>>()
   private readonly listeners = new Set<() => void>()
 
@@ -216,6 +252,38 @@ export class PluginRegistry {
   /** Every linter, in the order they were added. */
   linterList(): PluginLinter[] {
     return [...this.linters.values()]
+  }
+
+  addLineAnnotation(
+    pluginId: string,
+    annotator: {
+      id: string
+      name: string
+      annotate: PluginLineAnnotator["annotate"]
+    }
+  ): void {
+    if (typeof annotator?.annotate !== "function") {
+      throw new Error("A line annotation needs an `annotate` function.")
+    }
+    const id = `${pluginId}:${String(annotator.id)}`
+    this.lineAnnotators.set(id, {
+      id,
+      pluginId,
+      name: String(annotator.name || annotator.id),
+      annotate: annotator.annotate,
+    })
+    this.track(pluginId, () => {
+      if (this.lineAnnotators.get(id)?.annotate === annotator.annotate) {
+        this.lineAnnotators.delete(id)
+      }
+    })
+    this.changed()
+  }
+
+  /** Every line annotator, in the order they were added. The editor draws
+   * the first: the end of one line has room for one sentence. */
+  lineAnnotatorList(): PluginLineAnnotator[] {
+    return [...this.lineAnnotators.values()]
   }
 
   isLoaded(pluginId: string): boolean {

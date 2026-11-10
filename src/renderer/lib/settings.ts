@@ -80,12 +80,6 @@ type Stored = {
    */
   seenVersion: string | null
   /**
-   * The faint `who, when • why` after the caret's line in a file, and its hover
-   * — `lib/editor-git-blame.ts`. On by default: it is the editor saying what
-   * it knows about a line, and somebody who finds it noise turns it off once.
-   */
-  gitBlame: boolean
-  /**
    * Every project's tabs in the strip at once, rather than only the project
    * being worked in (`inScope` in `lib/panels.ts`). Off by default: per project
    * is how the strip has always been, and nothing closes either way — turning
@@ -176,7 +170,6 @@ function isStored(value: unknown): value is Stored {
     (record.seenVersion === undefined ||
       record.seenVersion === null ||
       typeof record.seenVersion === "string") &&
-    (record.gitBlame === undefined || typeof record.gitBlame === "boolean") &&
     (record.allProjectTabs === undefined ||
       typeof record.allProjectTabs === "boolean") &&
     (record.composerHeight === undefined ||
@@ -233,7 +226,6 @@ type SettingsState = Stored & {
   setDensity: (density: Appearance["density"]) => void
   setOnboarded: (onboarded: boolean) => void
   setSeenVersion: (version: string) => void
-  setGitBlame: (on: boolean) => void
   setComposerHeight: (height: number | null) => void
   setAccountsHeight: (height: number | null) => void
   setGraphDetailsHeight: (height: number | null) => void
@@ -287,7 +279,6 @@ export const useSettings = create<SettingsState>((set, get) => {
       density,
       onboarded,
       seenVersion,
-      gitBlame,
       allProjectTabs,
       composerHeight,
       accountsHeight,
@@ -314,7 +305,6 @@ export const useSettings = create<SettingsState>((set, get) => {
       density,
       onboarded,
       seenVersion,
-      gitBlame,
       allProjectTabs,
       composerHeight,
       accountsHeight,
@@ -346,7 +336,6 @@ export const useSettings = create<SettingsState>((set, get) => {
     // preference somebody already made.
     onboarded: false,
     seenVersion: null,
-    gitBlame: true,
     allProjectTabs: false,
     composerHeight: null,
     accountsHeight: null,
@@ -431,11 +420,6 @@ export const useSettings = create<SettingsState>((set, get) => {
 
     setSeenVersion(seenVersion) {
       set({ seenVersion })
-      save()
-    },
-
-    setGitBlame(gitBlame) {
-      set({ gitBlame })
       save()
     },
 

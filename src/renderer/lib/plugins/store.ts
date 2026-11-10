@@ -13,6 +13,7 @@ import { exposeSharedModules } from "./shared-modules"
 import {
   PluginRegistry,
   type PluginChatMenuItem,
+  type PluginLineAnnotator,
   type PluginLinter,
   type PluginRailButton,
 } from "./registry"
@@ -58,6 +59,8 @@ type PluginsState = {
   railButtons: PluginRailButton[]
   /** Read by every file editor as it lints — `lib/plugins/editor-lint.ts`. */
   linters: PluginLinter[]
+  /** Read by every file editor — `lib/plugins/editor-line-annotation.ts`. */
+  lineAnnotators: PluginLineAnnotator[]
   notices: PluginNotice[]
 
   /** Lists the directory and starts every plugin switched on. Once, at launch. */
@@ -70,7 +73,7 @@ type PluginsState = {
   /**
    * Installs a plugin from a folder or a `.zip` the user picks, or updates the
    * one already installed under that id. A new plugin is left **off** — the
-   * standing warning in Settings is the decision point, not the picker — and an
+   * switch in the Plugins view is the decision point, not the picker — and an
    * updated one that was running is reloaded onto its new files. Null when the
    * picker was cancelled; throws with the reason when the install was refused.
    */
@@ -92,6 +95,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
       chatMenuItems: registry.chatMenuList(),
       railButtons: registry.railButtonList(),
       linters: registry.linterList(),
+      lineAnnotators: registry.lineAnnotatorList(),
     })
   )
 
@@ -178,6 +182,7 @@ export const usePlugins = create<PluginsState>((set, get) => {
     chatMenuItems: [],
     railButtons: [],
     linters: [],
+    lineAnnotators: [],
     notices: [],
 
     async restore() {
