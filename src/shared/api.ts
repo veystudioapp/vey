@@ -411,6 +411,13 @@ export type TsDefinition = {
   column: number
 }
 
+/** A run of a file tsserver calls unnecessary — unused, or unreachable — and
+ * the editor draws faded. 1-based, end exclusive, as tsserver counts. */
+export type TsSpan = {
+  from: { line: number; column: number }
+  to: { line: number; column: number }
+}
+
 /**
  * What opening a file gave back.
  *
@@ -2616,6 +2623,10 @@ export type DesktopApi = {
     line: number,
     column: number
   ) => Promise<TsDefinition[]>
+  /** What in the file, as the server was last told it, is unused — the spans
+   * VS Code fades. Null when the server did not answer in time, which is "keep
+   * what is drawn"; empty for a file no server reads. */
+  tsUnused: (filePath: string) => Promise<TsSpan[] | null>
 
   /**
    * Every file in the workspace, for the search palette.
@@ -3452,6 +3463,7 @@ export const IPC = {
   tsClose: "ts:close",
   tsHover: "ts:hover",
   tsDefinition: "ts:definition",
+  tsUnused: "ts:unused",
   agentModels: "agent:models",
   agentCommands: "agent:commands",
   installedMcpServers: "mcp:installed",

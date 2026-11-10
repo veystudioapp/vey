@@ -1729,6 +1729,10 @@ export function createIpc(host: Host): {
       tsServers.definition(await inWorkspace(filePath), line, column)
   )
 
+  handle(IPC.tsUnused, async (_event, filePath: string) =>
+    tsServers.unused(await inWorkspace(filePath))
+  )
+
   /*
    * The tree follows the disk while it is open — see `main/watch.ts` for why
    * this watches the expanded directories and nothing above or below them.

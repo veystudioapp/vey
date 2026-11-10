@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from "node:child_process"
 import { existsSync } from "node:fs"
 import path from "node:path"
 
-import type { TsDefinition, TsHover } from "../shared/api"
+import type { TsDefinition, TsHover, TsSpan } from "../shared/api"
 
 /**
  * What makes hovering an import say something.
@@ -39,6 +39,19 @@ import type { TsDefinition, TsHover } from "../shared/api"
  * hover in milliseconds; a wait this long means it is loading a project, and
  * the answer is no longer wanted by then anyway. */
 const REQUEST_TIMEOUT_MS = 8_000
+
+/** The unused-code fade is still wanted after a project has loaded, unlike a
+ * hover the pointer has long since left — and the first file opened is the one
+ * tsserver loads the whole project for, which on a monorepo outlasts the hover's
+ * wait. Without this the first file opened would never fade until edited. */
+const DIAGNOSTICS_TIMEOUT_MS = 60_000
+
+/** One tsserver diagnostic, as much of it as the fade reads. */
+type Diagnostic = {
+  start: { line: number; offset: number }
+  end: { line: number; offset: number }
+  reportsUnnecessary?: unknown
+}
 
 /**
  * The `tsserver.js` a folder is read by — its own, or none.
@@ -200,13 +213,17 @@ class TsServer {
   }
 
   /** A command with an answer. */
-  private request(command: string, args: unknown): Promise<unknown> {
+  private request(
+    command: string,
+    args: unknown,
+    timeoutMs = REQUEST_TIMEOUT_MS
+  ): Promise<unknown> {
     const seq = (this.seq += 1)
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(seq)
         resolve(null)
-      }, REQUEST_TIMEOUT_MS)
+      }, timeoutMs)
       this.pending.set(seq, { resolve, reject, timer })
       this.send(command, args, seq)
     })
@@ -309,6 +326,38 @@ class TsServer {
     }))
   }
 
+  /**
+   * What VS Code draws faded: every diagnostic tsserver marks
+   * `reportsUnnecessary` — an unused import, local, parameter or declaration,
+   * unreachable code.
+   *
+   * From both lists, because which one carries it is the project's choice:
+   * with `noUnusedLocals` / `noUnusedParameters` on, an unused name is a
+   * *semantic* error; with them off, the same finding is a *suggestion*. The
+   * rest of either list — the type errors themselves — is dropped here: the
+   * squiggles are a separate feature (`lib/files/typescript.ts` says why it was
+   * left out), and fading is all this was asked for.
+   *
+   * Null when neither answered in time, which the renderer reads as "keep what
+   * is drawn" rather than "nothing is unused".
+   */
+  async unused(file: string): Promise<TsSpan[] | null> {
+    const lists = (await Promise.all(
+      ["semanticDiagnosticsSync", "suggestionDiagnosticsSync"].map((command) =>
+        this.request(command, { file }, DIAGNOSTICS_TIMEOUT_MS)
+      )
+    )) as (Diagnostic[] | null)[]
+    if (lists.every((list) => list === null)) return null
+
+    return lists
+      .flatMap((list) => list ?? [])
+      .filter((diagnostic) => diagnostic.reportsUnnecessary)
+      .map((diagnostic) => ({
+        from: { line: diagnostic.start.line, column: diagnostic.start.offset },
+        to: { line: diagnostic.end.line, column: diagnostic.end.offset },
+      }))
+  }
+
   stop() {
     this.child?.kill()
     this.forget()
@@ -397,6 +446,13 @@ export class TsServers {
   ): Promise<TsDefinition[]> {
     const server = await this.serverFor(file)
     return server ? server.definition(file, line, offset) : []
+  }
+
+  /** Empty, not null, for a file no server reads: there is nothing to wait
+   * for, and nothing in it is known to be unused. */
+  async unused(file: string): Promise<TsSpan[] | null> {
+    const server = await this.serverFor(file)
+    return server ? server.unused(file) : []
   }
 
   /** The servers reading `dir` or a folder inside it, ahead of that directory

@@ -170,6 +170,42 @@ async function main() {
       editedHover?.signature.includes("afterTheEnd") === true,
       editedHover
     )
+
+    section("unused code")
+
+    // Unsaved, like the hover above: the fade is about the editor's text.
+    const unusedText = `${own.text}\n\nfunction neverCalled() {\n  const neverRead = 1\n}\n`
+    await servers.change(own.file, unusedText)
+    const lines = unusedText.split("\n")
+    const fnLine = lines.findIndex((line) => line.includes("neverCalled")) + 1
+    const localLine = lines.findIndex((line) => line.includes("neverRead")) + 1
+
+    const spans = (await servers.unused(own.file)) ?? []
+    const covers = (line: number, word: string) =>
+      spans.some(
+        (span) =>
+          span.from.line === line &&
+          lines[line - 1]!.slice(span.from.column - 1).startsWith(word)
+      )
+    check(
+      "an uncalled function is reported, starting at its name",
+      covers(fnLine, "neverCalled"),
+      spans
+    )
+    check(
+      "and a local never read inside it",
+      covers(localLine, "neverRead"),
+      spans
+    )
+    check(
+      "nothing used is reported",
+      spans.every((span) => span.from.line >= fnLine),
+      spans
+    )
+    check(
+      "a file in no folder is answered empty rather than waited on",
+      (await servers.unused("/nowhere/at/all.ts"))?.length === 0
+    )
   } finally {
     servers.stopAll()
   }

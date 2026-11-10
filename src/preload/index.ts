@@ -155,6 +155,7 @@ const api: DesktopApi = {
     ipcRenderer.invoke(IPC.tsHover, filePath, line, column),
   tsDefinition: (filePath, line, column) =>
     ipcRenderer.invoke(IPC.tsDefinition, filePath, line, column),
+  tsUnused: (filePath) => ipcRenderer.invoke(IPC.tsUnused, filePath),
 
   getSetting: (key) => ipcRenderer.invoke(IPC.getSetting, key),
   setSetting: (key, value) => ipcRenderer.invoke(IPC.setSetting, key, value),

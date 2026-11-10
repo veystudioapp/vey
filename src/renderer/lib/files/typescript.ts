@@ -1,10 +1,18 @@
 import {
   keymap,
   type Command,
+  Decoration,
+  type DecorationSet,
   EditorView,
   hoverTooltip,
+  ViewPlugin,
 } from "@codemirror/view"
-import type { Extension } from "@codemirror/state"
+import {
+  type Extension,
+  StateEffect,
+  StateField,
+  type Text,
+} from "@codemirror/state"
 
 import type { TsHover } from "@shared/api"
 
@@ -34,7 +42,9 @@ import { useFiles } from "./store"
  * was written to avoid. So the squiggle on a genuine typo is gone. The server
  * that could give it back properly — with the *type* errors Monaco's worker
  * never had — is already running; wiring diagnostics through it is a feature
- * this migration deliberately did not smuggle in.
+ * this migration deliberately did not smuggle in. One slice of them is wired:
+ * the diagnostics tsserver marks *unnecessary*, drawn faded as VS Code draws
+ * unused code (`unusedFade`) — no squiggle, no list of problems.
  *
  * These are per view rather than registered per language, which is the shape
  * CodeMirror asks for and happens to be better: a hover source attached to one
@@ -63,6 +73,29 @@ const SYNC_DELAY_MS = 250
 /** One timer per file, so two open editors do not cancel each other's sync. */
 const pendingSync = new Map<string, ReturnType<typeof setTimeout>>()
 
+/**
+ * Who wants to know once the server holds a given text of a file — the
+ * unused-code fade, which has to ask *after* the text it is asking about has
+ * arrived. `tsChange` resolving is that moment: its handler has written the
+ * text to tsserver's stdin, so a request sent afterwards is queued behind it.
+ * Asking on a timer of its own instead would race the sync's.
+ */
+const syncedListeners = new Map<string, Set<(text: string) => void>>()
+
+function synced(filePath: string, text: string) {
+  for (const listener of syncedListeners.get(filePath) ?? []) listener(text)
+}
+
+function onSynced(filePath: string, listener: (text: string) => void) {
+  let listeners = syncedListeners.get(filePath)
+  if (!listeners) syncedListeners.set(filePath, (listeners = new Set()))
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) syncedListeners.delete(filePath)
+  }
+}
+
 /** Tells the server a file is being edited, and hands it the text once the
  * typing stops. */
 export function syncFile(filePath: string, text: string): void {
@@ -73,16 +106,23 @@ export function syncFile(filePath: string, text: string): void {
     filePath,
     setTimeout(() => {
       pendingSync.delete(filePath)
-      void window.desktop.tsChange(filePath, text).catch(() => {
-        // A server that is not running is a hover that says nothing, which is
-        // what the editor did before any of this existed. Not worth a notice.
-      })
+      void window.desktop.tsChange(filePath, text).then(
+        () => synced(filePath, text),
+        () => {
+          // A server that is not running is a hover that says nothing, which
+          // is what the editor did before any of this existed. Not worth a
+          // notice.
+        }
+      )
     }, SYNC_DELAY_MS)
   )
 }
 
 export function openFile(filePath: string, text: string): void {
-  void window.desktop.tsOpen(filePath, text).catch(() => {})
+  void window.desktop.tsOpen(filePath, text).then(
+    () => synced(filePath, text),
+    () => {}
+  )
 }
 
 export function closeFile(filePath: string): void {
@@ -192,6 +232,8 @@ export function typeScriptFeatures(filePath: string): Extension {
 
     keymap.of([{ key: "F12", run: jump }]),
 
+    unusedFade(filePath),
+
     EditorView.domEventHandlers({
       click(event, view) {
         if (!event.metaKey && !event.ctrlKey) return false
@@ -209,6 +251,79 @@ export function typeScriptFeatures(filePath: string): Extension {
         return false
       },
     }),
+  ]
+}
+
+/** The whole set at once: tsserver answers for the file, not for a range of
+ * it, so there is nothing to merge with what was drawn before. */
+const setUnused = StateEffect.define<DecorationSet>()
+
+/** Mapped through every edit, so a fade typed past stays on its word until the
+ * next answer replaces the lot. */
+const unusedField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(marks, tr) {
+    let next = marks.map(tr.changes)
+    for (const effect of tr.effects)
+      if (effect.is(setUnused)) next = effect.value
+    return next
+  },
+  provide: (field) => EditorView.decorations.from(field),
+})
+
+const unusedMark = Decoration.mark({ class: "cm-unnecessary" })
+
+/** tsserver's 1-based line and column as an offset, clamped: the spans are
+ * about the text the server was handed, and a line past the end throws. */
+function offsetOf(doc: Text, line: number, column: number): number {
+  const at = doc.line(Math.min(Math.max(line, 1), doc.lines))
+  return Math.min(at.from + Math.max(column - 1, 0), at.to)
+}
+
+/**
+ * Unused code drawn faded, the way VS Code draws it.
+ *
+ * Asked after each sync lands (`onSynced`) rather than on an edit, and the
+ * answer is applied only if the buffer still holds the text that was synced:
+ * positions computed against an older text would land on the wrong words, and
+ * a newer text has a sync — and so an answer — of its own on the way.
+ */
+function unusedFade(filePath: string): Extension {
+  return [
+    unusedField,
+    ViewPlugin.define((view) => {
+      let latest = 0
+      let alive = true
+      const stop = onSynced(filePath, (text) => {
+        const ask = (latest += 1)
+        void window.desktop
+          .tsUnused(filePath)
+          .then((spans) => {
+            if (!alive || ask !== latest || spans === null) return
+            const doc = view.state.doc
+            if (doc.toString() !== text) return
+            const marks = spans
+              .map((span) => ({
+                from: offsetOf(doc, span.from.line, span.from.column),
+                to: offsetOf(doc, span.to.line, span.to.column),
+              }))
+              .filter((range) => range.from < range.to)
+              .map((range) => unusedMark.range(range.from, range.to))
+            view.dispatch({
+              effects: setUnused.of(Decoration.set(marks, true)),
+            })
+          })
+          .catch(() => {})
+      })
+      return {
+        destroy() {
+          alive = false
+          stop()
+        },
+      }
+    }),
+    // VS Code's own `editorUnnecessaryCode.opacity`, `#000000aa`.
+    EditorView.baseTheme({ ".cm-unnecessary": { opacity: "0.67" } }),
   ]
 }
 

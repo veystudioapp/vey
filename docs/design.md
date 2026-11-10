@@ -1686,6 +1686,13 @@ if it has none, started with automatic typing acquisition off and fed the
 editor's buffer. Spoken to directly rather than through an LSP layer
 (`test/tsserver.ts` runs it for real).
 
+**Unused code is drawn faded**, as VS Code draws it: the diagnostics tsserver
+marks `reportsUnnecessary` (unused imports, locals, parameters, unreachable
+code), from the semantic list and the suggestion list both, since
+`noUnusedLocals` decides which one carries them (`IPC.tsUnused`). Asked after
+each sync lands, applied only if the buffer still holds the text synced. The
+rest of the diagnostics stay out — still no squiggles.
+
 ## The block editor
 
 BlockNote, behind a `.md` by choice. A `.md` is printed back lossily, so it is
