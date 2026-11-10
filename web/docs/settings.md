@@ -44,6 +44,15 @@ Plugins add features to Vey. Two come with it, switched on:
 
 Switch either off here if you do not use it.
 
+### Installing a plugin
+
+The Plugins view has a search box and two tabs. **Installed** lists what you
+have; **Marketplace** lists the plugins you can add (also browsable at
+[/plugins](/plugins)). Press **Install** on one: Vey downloads it, checks it
+against the marketplace's checksum, and adds it to **Installed**, switched
+off. Switch it on there once you have decided to run it. When the marketplace
+has a newer version, the button reads **Update**.
+
 ::: warning
 A plugin runs inside the studio with the same access the studio has — your
 files, your terminals, your chats. Only switch on a plugin you trust.

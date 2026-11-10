@@ -239,5 +239,18 @@ export const nav = {
       "A plugin is a folder with a manifest.json and a main.js. Installing the same id again updates it.",
     updated: "Updated {name}.",
     installed: "Installed {name}. Switch it on to run it.",
+    search: "Search plugins",
+    installedTab: "Installed",
+    marketplaceTab: "Marketplace",
+    noMatch: "No plugin matches.",
+    marketplaceEmpty: "No plugins in the marketplace yet.",
+    marketplaceWarning:
+      "Plugins here are written by other people and run with the whole of Vey's access. Install one you trust, then switch it on in Installed.",
+    install: "Install",
+    update: "Update",
+    installing: "Installing…",
+    isInstalled: "Installed",
+    builtin: "Built in",
+    source: "Source",
   },
 }

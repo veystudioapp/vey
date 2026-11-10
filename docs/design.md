@@ -1168,8 +1168,8 @@ which any plugin could fill in.
 
 **A plugin made outside the app is installed, not dropped in.** The Plugins
 view has `Install from folder…` and `Install from .zip…`
-(`main/plugin-install.ts`), and the marketplace, when there is one, will
-download an archive and hand it to the same `installPlugin`. An install
+(`main/plugin-install.ts`), and the marketplace downloads an archive and
+hands it to the same `installPlugin` (§ The plugin marketplace). An install
 **copies the files that are served** — `manifest.json`, `main.js`,
 `styles.css` and the manifest's icon at its path — under the id the manifest gives, so a plugin's repository
 brings none of its `src/` or `node_modules/`, and no path inside a zip ever
@@ -1223,10 +1223,10 @@ so it can reach `window.desktop` — terminals included — whatever `PluginApp`
 leaves out. The narrow API buys stability and registrations that undo
 themselves (`lib/plugins/registry.ts`: everything added through `PluginApp`
 is taken back, newest first, when the plugin is switched off or its `onload`
-throws), not containment. The Plugins view said so in a standing line, and no
-longer does: with installing hidden every plugin listed is one the app ships,
-so the caution had nothing in the list to be about. It returns with the
-install buttons, as a standing line rather than a confirm clicked through once. Real isolation — a sandboxed `iframe` per plugin
+throws), not containment. The Plugins view said so in a standing line, lost
+it while installing was hidden — every plugin listed was one the app ships —
+and has it back over the marketplace's list, where code of somebody else's
+comes from: a standing line rather than a confirm clicked through once. Real isolation — a sandboxed `iframe` per plugin
 on its own origin, talking `postMessage` — is the next step if plugins are ever
 installed from somewhere other than the user's own hands.
 
@@ -1248,6 +1248,45 @@ already loads: a second copy of a store is a second store, and a second
 Milkdown or CodeMirror is weight and, for CodeMirror, the trap CLAUDE.md warns
 about. That is why the transcript's renderer is on `PluginApp` as
 `renderMarkdown` rather than imported.
+
+### The plugin marketplace
+
+**Searched and installed in the app; only shown on the site** (2026-11-10).
+The Plugins view is one search box over two tabs, `Installed` and
+`Marketplace`; the site's `/plugins` lists the built-in plugins and the
+catalog with no download button at all. One install path, the app's, because
+it is the one that checks what it installs.
+
+**The catalog is one file in this repository**, `marketplace/plugins.json`,
+read by main off `raw.githubusercontent.com` at `main` (`MARKETPLACE_URL`,
+overridden by `VEYSTUDIO_MARKETPLACE_URL`) and by the site at build time. A
+plugin is listed by a pull request and nothing is deployed — no server of
+ours, no account, no upload. The cost is that a listing waits for a merge,
+which is also the review.
+
+**An entry pins its zip by SHA-256.** Main fetches the entry's `download`
+(`https` only, 25 MB at most), hashes it, and refuses a mismatch before
+anything is unpacked — a release asset swapped after its entry was reviewed is
+not installed. Then the manifest's `id` must be the entry's, so an entry
+reviewed as one plugin cannot install, or update, another. **The renderer
+never hands main a URL**: `PluginSource` is `{ marketplace: id }`, looked up
+in the catalog main itself fetched (`main/marketplace.ts`,
+`test/marketplace.ts`). A new version is a new `version`, `download` and
+`sha256` in one pull request; `marketplaceActionOf` offers `Update` when the
+catalog's version is newer than the copy installed.
+
+**Installed off**, like a folder or a zip: Install fetches the code, the
+switch in `Installed` is the decision to run it. **No icons in the app's
+list** — an entry's icon would be a picture off somebody's server fetched by
+opening the tab; the plugin's own icon is drawn once installed. The site
+draws the built-in plugins' icons, which are this repository's.
+
+**Still not a sandbox.** § Plugins said real isolation was the next step "if
+plugins are ever installed from somewhere other than the user's own hands",
+and the marketplace is that. It ships without it, on the bargain that every
+entry is reviewed before merge, pinned by hash and arrives switched off. If the
+catalog ever takes entries nobody reads, that bargain is gone and the
+`iframe`-per-plugin isolation is owed first.
 
 ### Chat export, the first built-in plugin
 

@@ -11,6 +11,7 @@ import {
   installPathOf,
   langOf,
   pathOf,
+  pluginsPathOf,
 } from "./copy.ts"
 import { ICON, REPO_URL, slugOf } from "./links.ts"
 
@@ -39,6 +40,7 @@ const slug = computed(() => slugOf(page.value.relativePath))
       <a :href="`${at}#why`">{{ t.why }}</a>
       <a :href="`${at}#features`">{{ t.features }}</a>
       <a :href="`${at}#faq`">{{ t.faq }}</a>
+      <a :href="pluginsPathOf(current)">{{ t.plugins }}</a>
       <a :href="docsStartOf(current)">{{ t.docs }}</a>
     </div>
     <div class="nav-end">

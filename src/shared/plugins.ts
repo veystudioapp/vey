@@ -120,8 +120,9 @@ export type PluginInstall = {
   replaced: boolean
 }
 
-/** Where an install reads a plugin from. The marketplace will be a third. */
-export type PluginSource = "folder" | "zip"
+/** Where an install reads a plugin from: a picker, or the marketplace's entry
+ * by id — main downloads it (`main/marketplace.ts`). */
+export type PluginSource = "folder" | "zip" | { marketplace: string }
 
 /**
  * The URL one of a plugin's files is loaded from.

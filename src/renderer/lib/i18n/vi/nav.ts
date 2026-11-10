@@ -238,5 +238,18 @@ export const nav: Messages["nav"] = {
       "Plugin là một thư mục có manifest.json và main.js. Cài lại cùng id sẽ cập nhật nó.",
     updated: "Đã cập nhật {name}.",
     installed: "Đã cài {name}. Bật nó lên để chạy.",
+    search: "Tìm plugin",
+    installedTab: "Đã cài",
+    marketplaceTab: "Marketplace",
+    noMatch: "Không có plugin nào khớp.",
+    marketplaceEmpty: "Marketplace chưa có plugin nào.",
+    marketplaceWarning:
+      "Plugin ở đây do người khác viết và chạy với toàn bộ quyền của Vey. Chỉ cài plugin bạn tin tưởng, rồi bật nó trong Đã cài.",
+    install: "Cài",
+    update: "Cập nhật",
+    installing: "Đang cài…",
+    isInstalled: "Đã cài",
+    builtin: "Có sẵn",
+    source: "Mã nguồn",
   },
 }

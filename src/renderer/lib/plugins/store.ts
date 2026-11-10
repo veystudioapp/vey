@@ -1,5 +1,6 @@
 import { create } from "zustand"
 
+import type { MarketplacePlugin } from "@shared/marketplace"
 import {
   pluginUrl,
   type PluginInfo,
@@ -65,6 +66,11 @@ type PluginsState = {
   /** Read by every file editor — `lib/plugins/editor-line-annotation.ts`. */
   lineAnnotators: PluginLineAnnotator[]
   notices: PluginNotice[]
+  /** The marketplace's catalog, null until it has been read. */
+  catalog: MarketplacePlugin[] | null
+  /** Why the catalog could not be read, the last time it was asked for. */
+  catalogError: string | null
+  catalogLoading: boolean
 
   /** Lists the directory and starts every plugin switched on. Once, at launch. */
   restore: () => Promise<void>
@@ -74,13 +80,17 @@ type PluginsState = {
   /** Unloads and imports a plugin again, for somebody editing its `main.js`. */
   reload: (id: string) => Promise<void>
   /**
-   * Installs a plugin from a folder or a `.zip` the user picks, or updates the
-   * one already installed under that id. A new plugin is left **off** — the
+   * Installs a plugin from a folder or a `.zip` the user picks, or the
+   * marketplace's entry of an id, or updates the one already installed under
+   * that id. A new plugin is left **off** — the
    * switch in the Plugins view is the decision point, not the picker — and an
    * updated one that was running is reloaded onto its new files. Null when the
    * picker was cancelled; throws with the reason when the install was refused.
    */
   install: (source: PluginSource) => Promise<PluginInstall | null>
+  /** Reads the marketplace's catalog — main holds it ten minutes unless
+   * `refresh`. A failure is kept in `catalogError`, never thrown. */
+  loadCatalog: (refresh?: boolean) => Promise<void>
   /** Switches a user's plugin off and moves it to the trash. */
   remove: (id: string) => Promise<void>
   /** A notice in the plugin's name — `app.notice`. */
@@ -189,6 +199,9 @@ export const usePlugins = create<PluginsState>((set, get) => {
     linters: [],
     lineAnnotators: [],
     notices: [],
+    catalog: null,
+    catalogError: null,
+    catalogLoading: false,
 
     async restore() {
       if (get().loaded) return
@@ -245,6 +258,18 @@ export const usePlugins = create<PluginsState>((set, get) => {
         await start(installed.id)
       }
       return installed
+    },
+
+    async loadCatalog(refresh) {
+      set({ catalogLoading: true })
+      try {
+        const catalog = await window.desktop.marketplacePlugins(refresh)
+        set({ catalog, catalogError: null })
+      } catch (error) {
+        set({ catalogError: messageOfBridge(error) })
+      } finally {
+        set({ catalogLoading: false })
+      }
     },
 
     async remove(id) {
@@ -318,4 +343,13 @@ function idsOf(stored: string | null): string[] {
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** What crossed the bridge as an error, without Electron's `Error invoking
+ * remote method '…':` in front of the sentence main wrote. */
+export function messageOfBridge(error: unknown): string {
+  return messageOf(error).replace(
+    /^Error invoking remote method '[^']+': (?:Error: )?/,
+    ""
+  )
 }
