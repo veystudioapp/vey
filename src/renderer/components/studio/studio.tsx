@@ -37,6 +37,7 @@ import { useWorkspaceSearch } from "@/lib/workspace-search"
 import { useClaudeProfiles } from "@/lib/chat/claude-profiles"
 import { useBrowser } from "@/lib/browser/store"
 import { useInbox } from "@/lib/inbox/store"
+import { useBots } from "@/lib/bots/store"
 import { useChats } from "@/lib/chat/store"
 import { badgeCount } from "@/lib/chat/unread"
 import { Dock } from "./dock"
@@ -49,6 +50,7 @@ import { IconButton } from "./icon-button"
 import { ChangesPane } from "./files/changes-pane"
 import { GitGraphPane } from "./files/git-graph-pane"
 import { InboxPane } from "./inbox/inbox-pane"
+import { BotsPane } from "./bots/bots-pane"
 import { FileWorkspace } from "./files/file-workspace"
 import { AddFolderDialog } from "./add-folder-dialog"
 import { UnsavedDialog } from "./files/unsaved-dialog"
@@ -82,6 +84,8 @@ function paneView(pane: Pane) {
       return <GitGraphPane />
     case "inbox":
       return <InboxPane />
+    case "bots":
+      return <BotsPane />
     case "chat":
       return <ChatPane />
   }
@@ -136,6 +140,12 @@ export function Studio() {
   useEffect(() => {
     void useInbox.getState().load()
     return useInbox.getState().listen()
+  }, [])
+  // Every project's bots, run in main — subscribed whether or not a tab is
+  // open, since a run's push is what brings its chat into the column.
+  useEffect(() => {
+    void useBots.getState().load()
+    return useBots.getState().listen()
   }, [])
 
   // The dock icon's red number. Here rather than in main because `unread` is

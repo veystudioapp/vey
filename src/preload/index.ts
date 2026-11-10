@@ -13,6 +13,7 @@ import {
   type MenuCommand,
   type ChatEvent,
   type ProjectInbox,
+  type Bot,
   type TerminalExit,
   type TerminalOutput,
   type UpdateProgress,
@@ -292,6 +293,11 @@ const api: DesktopApi = {
     ipcRenderer.invoke(IPC.inboxSetSettings, folderId, settings),
   onInboxChanged: (listener) =>
     subscribe<ProjectInbox[]>(IPC.inboxChanged, listener),
+  bots: () => ipcRenderer.invoke(IPC.bots),
+  saveBot: (input) => ipcRenderer.invoke(IPC.saveBot, input),
+  deleteBot: (id) => ipcRenderer.invoke(IPC.deleteBot, id),
+  runBot: (id) => ipcRenderer.invoke(IPC.runBot, id),
+  onBotsChanged: (listener) => subscribe<Bot[]>(IPC.botsChanged, listener),
 }
 
 contextBridge.exposeInMainWorld("desktop", api)

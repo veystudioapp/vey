@@ -1,4 +1,5 @@
 import {
+  Bot,
   GitCompare,
   GitGraph,
   Inbox,
@@ -10,6 +11,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { useChanges } from "@/lib/files/changes"
 import { useGitGraph } from "@/lib/files/git-graph"
 import { unreadOf, useInbox } from "@/lib/inbox/store"
+import { useBots } from "@/lib/bots/store"
 import { isDeleted, isDirty, useFiles } from "@/lib/files/store"
 import { gitStateOf, GIT_TONES, useGitStatus } from "@/lib/files/git-status"
 import { nameOf } from "@/lib/files/paths"
@@ -47,6 +49,7 @@ export function useTabItems(): Map<string, TabStripItem> {
   const graphOpenIds = useGitGraph((state) => state.openIds)
   const inboxOpenIds = useInbox((state) => state.openIds)
   const inboxes = useInbox((state) => state.byFolder)
+  const botsOpenIds = useBots((state) => state.openIds)
   const changesByRoot = useChanges((state) => state.byRoot)
 
   const fileOpenIds = useFiles((state) => state.openIds)
@@ -160,6 +163,20 @@ export function useTabItems(): Map<string, TabStripItem> {
       icon: <Inbox className="size-3 shrink-0" />,
       note: unread ? String(unread) : undefined,
       title: folder ?? t("inbox.tab"),
+    })
+  }
+
+  // `Bots`, one per project, named the way `Inbox` is.
+  for (const projectId of botsOpenIds) {
+    const folder = workspaceFolders.find(
+      (entry) => entry.id === projectId
+    )?.name
+    add({
+      id: PREFIX.bots + projectId,
+      label:
+        allProjectTabs && folder ? t("bots.tabIn", { folder }) : t("bots.tab"),
+      icon: <Bot className="size-3 shrink-0" />,
+      title: folder ?? t("bots.tab"),
     })
   }
 

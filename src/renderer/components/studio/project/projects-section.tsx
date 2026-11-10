@@ -3,6 +3,7 @@ import {
   ChevronRight,
   FolderGit2,
   GitBranch,
+  Bot as BotIcon,
   Inbox as InboxIcon,
   MoreHorizontal,
   Plus,
@@ -26,6 +27,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useT } from "@/lib/i18n"
 import { unreadOf, useInbox } from "@/lib/inbox/store"
+import { useBots } from "@/lib/bots/store"
 import { useProjects } from "@/lib/projects"
 import { byCheckout, checkoutsOf, projectOf } from "@/lib/project-checkouts"
 import { useShells } from "@/lib/shell/store"
@@ -205,6 +207,14 @@ function ProjectHeader({
         </span>
       </Button>
       <InboxButton projectId={project.id} />
+      <IconButton
+        label={t("bots.button")}
+        side="bottom"
+        onClick={() => useBots.getState().open(project.id)}
+        className="size-6"
+      >
+        <BotIcon />
+      </IconButton>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={

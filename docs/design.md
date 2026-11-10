@@ -760,6 +760,62 @@ sight of the chat that is driving it.
   studio's window has nowhere to draw one, and the tool says so. A popped-out
   chat has no browser.
 
+## Bots
+
+A saved prompt sent into a **new chat of its project** on a schedule
+(`main/bots.ts`, `shared/bots.ts`, `components/studio/bots/`,
+`lib/bots/store.ts`; `test/bots.ts`). Asked for by the person using the app,
+on the model of Grok's scheduled tasks. A project's `Bots` button, beside its
+`Inbox`, opens its `Bots` tab: each bot with its schedule, its next run, `Run
+now`, a switch, and its last runs, each a link to the chat it opened.
+
+**Why this is not a helper turn.** The rule this app holds — no feature calls
+the CLI as a helper, because a helper turn is a turn nobody asked for — is
+about turns nobody can see and nobody asked for. A bot is asked for, in
+advance, in words somebody wrote, and every run is an **ordinary chat** made
+through the same `Chats.create` / `send` a `+` is: listed in the column,
+unread when it answers, notified, readable and continuable. Nothing about a
+run is hidden — the quiet sentence below included, which is on the user line.
+What was deleted under that rule stays deleted: the ClickUp watcher's agents
+(a second account of a tracker, a poll always running) and pipelines (chats
+chained into stages). A bot is neither — it reads nothing in on its own, and
+one run is one chat.
+
+**Local, and only while the app is open.** The alternative was the CLI's own
+cloud routines, which run with the machine off but on a clone, without this
+machine's MCP servers, `gh` login, `.env` or the chat's browser cookies — and
+those are what the uses worth having need: a morning brief off the tracker
+through the user's own connector, a pre-read of the reviews waiting on them,
+standup notes off their own commits. Those are the three starting points the
+empty tab offers (`lib/bots/templates.ts`), and their prompts are English for
+§ Language's reason. A missed time — the app shut, the Mac asleep (a
+suspended timer fires late) — is owed **one** run, the latest
+(`latestDue`), marked `catch-up`: a weekend asleep is one Monday brief, not
+six. While a run works the machine is held awake like any chat.
+
+**Two schedule shapes, no cron line**: a time of day, or every 1–12 hours on
+the hours that divide 24 from local midnight — each on chosen weekdays.
+`lastDueAt` is what the next tick counts from, and anything that moves when a
+bot runs (a new schedule, switched back on) moves it to now, so an edit at
+08:31 does not owe the 08:30 it just passed. A run is **skipped**, and says
+so, while the bot's previous one is still working.
+
+**Quiet runs.** The risk of this feature is noise — a bot whose chats nobody
+reads is the stale half the board was. With `quiet` on (the default) the
+message ends with one sentence asking for `NOTHING_TO_REPORT` as the last
+line when nothing needs attention (`QUIET_ASK`), and a run whose reply ends
+on it (`isQuietReply`, read at quiet, not `done`, for `main/notify.ts`'s
+reason) is **neither notified nor left unread**: main holds the `done` notice
+of a run in flight (`Bots.holds`) and rings it only for a run that reported,
+and the renderer takes the dot off on the push that turns a run `quiet`. The
+chat is still in the column, for anybody who wants to check.
+
+**Never `Ask`**: nobody is in front of a run to answer, so the form offers
+`Plan` / `Read only` / `Edits` / `Full access` and main narrows `ask` to
+`read`. A run that stops on a question anyway — an `Edits` MCP call — is a
+chat in `Needs you`, which is exactly what that section is for. A bot whose
+checkout has left the workspace is kept and passed over, like an inbox.
+
 ## The dock
 
 A tab per shell and a `+`, under the pane. **Collapsed, not unmounted** — a pty

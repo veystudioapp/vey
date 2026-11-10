@@ -1,4 +1,5 @@
 import type { Messages } from "../en"
+import { bots } from "./bots"
 import { chat } from "./chat"
 import { common } from "./common"
 import { files } from "./files"
@@ -19,5 +20,6 @@ export const vi: Messages = {
   transcript,
   files,
   inbox,
+  bots,
   onboarding,
 }

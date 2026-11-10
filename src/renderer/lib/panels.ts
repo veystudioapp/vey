@@ -3,6 +3,7 @@ import { chatRootId } from "@shared/api"
 import { useChanges } from "./files/changes"
 import { useGitGraph } from "./files/git-graph"
 import { useInbox } from "./inbox/store"
+import { useBots } from "./bots/store"
 import { projectOf } from "./project-checkouts"
 import { useFiles } from "./files/store"
 import { fileRoots, rootOfPath, shownRootOf } from "./files/roots"
@@ -114,6 +115,13 @@ const inboxActive = (
     ? state.selectedId
     : null
 
+const botsActive = (
+  state: ReturnType<typeof useBots.getState>
+): string | null =>
+  state.selectedId && state.openIds.includes(state.selectedId)
+    ? state.selectedId
+    : null
+
 /**
  * An inbox is a **project's**, not a checkout's, so while one of that
  * project's worktrees is the root being worked in, the tab belongs to it too —
@@ -181,6 +189,17 @@ const PANELS: Record<Pane, PanelTabs> = {
     closeOthers: (id) => useInbox.getState().closeOthers(id),
     closeAll: () => useInbox.getState().closeAll(),
     reorder: (ids) => useInbox.getState().reorder(ids),
+    rootOf: inboxRootOf,
+  },
+  // A project's, like its inbox — and followed onto its worktrees the same way.
+  bots: {
+    open: () => useBots.getState().openIds,
+    active: () => botsActive(useBots.getState()),
+    select: (id) => useBots.getState().select(id),
+    close: (id) => useBots.getState().close(id),
+    closeOthers: (id) => useBots.getState().closeOthers(id),
+    closeAll: () => useBots.getState().closeAll(),
+    reorder: (ids) => useBots.getState().reorder(ids),
     rootOf: inboxRootOf,
   },
   files: {
@@ -445,6 +464,7 @@ function usePanelActive(pane: Pane): string | null {
     changes: useChanges(changesActive),
     graph: useGitGraph(graphActive),
     inbox: useInbox(inboxActive),
+    bots: useBots(botsActive),
     chat: useChats(chatActive),
   }[pane]
 }
@@ -486,6 +506,7 @@ export function useHasOpenTabs(): boolean {
   useChanges((state) => state.openIds)
   useGitGraph((state) => state.openIds)
   useInbox((state) => state.openIds)
+  useBots((state) => state.openIds)
 
   // Every pane in `PANES`, and the reason this is worth saying: a panel left out
   // of that list can never be drawn. The workbench only shows a pane once the

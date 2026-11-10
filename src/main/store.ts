@@ -13,6 +13,7 @@ import path from "node:path"
 
 import type {
   AssistantMessage,
+  Bot,
   ClaudeProfile,
   Chat,
   WorkspaceFolder,
@@ -122,6 +123,9 @@ export const PLUGIN_DATA_DIR = "plugin-data"
 /** Each project's ClickUp inbox. Not `clickup-watches.json`, which the
  * deleted watcher left and nothing reads. */
 export const CLICKUP_INBOX_FILE = "clickup-inbox.json"
+
+/** Every project's bots and their recent runs — `main/bots.ts`. */
+export const BOTS_FILE = "bots.json"
 
 /**
  * A note file's name, checked before it becomes a filename.
@@ -445,6 +449,15 @@ export class Store {
   /** Not pretty-printed: `seen` holds a status per task in each list. */
   writeClickupInbox(records: InboxRecord[]): Promise<void> {
     return this.writeList(CLICKUP_INBOX_FILE, records, false)
+  }
+
+  /** Every bot — `main/bots.ts`. */
+  readBots(): Promise<Bot[]> {
+    return this.readList<Bot>(BOTS_FILE)
+  }
+
+  writeBots(bots: Bot[]): Promise<void> {
+    return this.writeList(BOTS_FILE, bots)
   }
 
   /**

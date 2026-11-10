@@ -3232,6 +3232,19 @@ export type DesktopApi = {
   /** Every inbox, after anything about one of them changed. Returns an
    * unsubscribe. */
   onInboxChanged: (listener: (inboxes: ProjectInbox[]) => void) => () => void
+
+  /** Every bot in the workspace, every project's — `main/bots.ts`. */
+  bots: () => Promise<Bot[]>
+  /** Adds a bot, or replaces the one with that id. Main narrows what it is
+   * sent (`botInputOf`) and answers with the bot as kept. */
+  saveBot: (input: BotInput) => Promise<Bot>
+  /** Forgets a bot. The chats its runs opened stay. */
+  deleteBot: (id: string) => Promise<void>
+  /** Runs a bot now, whatever its schedule says — `Run now`. */
+  runBot: (id: string) => Promise<void>
+  /** Every bot, after anything about one of them changed — a run started,
+   * finished or skipped included. Returns an unsubscribe. */
+  onBotsChanged: (listener: (bots: Bot[]) => void) => () => void
 }
 
 /**
@@ -3399,6 +3412,75 @@ export type ProjectInbox = {
   error: string | null
 }
 
+/**
+ * When a bot runs, in the machine's own clock — `docs/design.md` § Bots.
+ *
+ * Two shapes rather than a cron line: a cron line is the one schedule nobody
+ * reads back correctly, and these two cover what was asked for — a brief at
+ * a time of day, or a check every few hours. `days` are `Date.getDay()`
+ * numbers (Sunday 0), so weekdays, a weekend or one day a week are both shapes.
+ * An `every` bot runs on the hours divisible by `hours` from local midnight,
+ * which is what makes "every 2 hours" a list somebody can predict.
+ */
+export type BotSchedule =
+  | { kind: "daily"; time: string; days: number[] }
+  | { kind: "every"; hours: number; days: number[] }
+
+/** One time a bot was due, and what came of it. */
+export type BotRun = {
+  id: string
+  /** When it started, or was skipped. ISO. */
+  at: string
+  /** The chat it opened — null for a skipped run. The chat may since have
+   * been deleted; the run says so by finding no row. */
+  chatId: string | null
+  /**
+   * `reported` is a run that finished with something to say, `quiet` one that
+   * said `NOTHING_TO_REPORT` (`QUIET_MARK` in `shared/bots.ts`), `skipped` one
+   * that never started — the previous run still working.
+   */
+  state: "running" | "reported" | "quiet" | "failed" | "skipped"
+  /** Scheduled, `Run now`, or the one run owed for a time the app was shut or
+   * the machine asleep. */
+  trigger: "schedule" | "manual" | "catch-up"
+  /** Why it was skipped or failed. */
+  note?: string
+}
+
+/**
+ * A saved prompt sent into a new chat of its project on a schedule.
+ *
+ * **Every run is a chat**, readable and continuable in the project's column
+ * like any other — never a turn nobody can see. See `docs/design.md` § Bots
+ * for why that is what lets this past the rule against helper turns.
+ */
+export type Bot = {
+  id: string
+  /** The project whose `Bots` tab lists it. */
+  projectId: string
+  /** Where its chats run: the project's own checkout or one of its worktrees. */
+  folderId: string
+  name: string
+  prompt: string
+  schedule: BotSchedule
+  /** Its chats' toolbar. Never `ask` — nobody is there to answer. */
+  options: ChatOptions
+  /** Asks the turn to end on `NOTHING_TO_REPORT` when there is nothing to
+   * say, and such a run is neither unread nor announced. */
+  quiet: boolean
+  enabled: boolean
+  createdAt: string
+  /** The last due time already acted on, ISO — what the next tick counts
+   * from. Moved to now by anything that changes when the bot runs, so editing
+   * a schedule does not owe a run for a time that has just passed. */
+  lastDueAt: string
+  /** Newest first, capped (`MAX_BOT_RUNS`). */
+  runs: BotRun[]
+}
+
+/** What the bot form saves: everything about a bot but its history. */
+export type BotInput = Omit<Bot, "createdAt" | "lastDueAt" | "runs">
+
 /** IPC channel names, shared so main and preload cannot drift apart. */
 export const IPC = {
   getWorkspace: "workspace:get",
@@ -3557,4 +3639,9 @@ export const IPC = {
   inboxRefresh: "inbox:refresh",
   inboxSetSettings: "inbox:settings",
   inboxChanged: "inbox:changed",
+  bots: "bots:list",
+  saveBot: "bots:save",
+  deleteBot: "bots:delete",
+  runBot: "bots:run",
+  botsChanged: "bots:changed",
 } as const

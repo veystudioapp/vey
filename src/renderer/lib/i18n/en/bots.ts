@@ -1,0 +1,93 @@
+/** A project's bots: the header's button, the `Bots` tab and the bot form. */
+export const bots = {
+  button: "Bots",
+  tab: "Bots",
+  tabIn: "Bots · {folder}",
+  goneTitle: "This project has left the workspace",
+  goneDetail: "Its bots stay on disk, paused, and come back with the project.",
+  header: {
+    caption: "Each run opens a chat in this project. Only while Vey is open.",
+    new: "New bot",
+  },
+  empty: {
+    title: "No bots yet",
+    detail:
+      "A bot sends a prompt you wrote into a new chat on a schedule — a brief before work, a pre-read of reviews. Its chats run on your own claude, with your accounts, MCP servers and files, only while Vey is open; a time missed while the Mac slept runs once when it wakes.",
+    startFrom: "Start from",
+    blank: "Blank bot",
+  },
+  templates: {
+    brief: {
+      name: "Morning brief",
+      detail: "Your tracker's tasks for today, against the branches here.",
+    },
+    reviews: {
+      name: "Reviews waiting on me",
+      detail: "Pull requests asking for your review, read ahead of you.",
+    },
+    standup: {
+      name: "Standup notes",
+      detail: "What you committed since the last working day.",
+    },
+  },
+  card: {
+    paused: "Paused",
+    next: "Next {when}",
+    noNext: "Never — no days picked",
+    runNow: "Run now",
+    enabled: "On schedule",
+    menu: "Bot",
+    edit: "Edit…",
+    delete: "Delete…",
+    noRuns: "Not run yet.",
+    goneChat: "chat deleted",
+  },
+  schedule: {
+    daily: "{days} at {time}",
+    every: "Every {hours} hours · {days}",
+    every_one: "Every hour · {days}",
+    everyDay: "every day",
+    weekdays: "weekdays",
+    weekends: "weekends",
+  },
+  run: {
+    running: "Running",
+    reported: "Reported",
+    quiet: "Nothing to report",
+    failed: "Failed",
+    skipped: "Skipped",
+    manual: "run now",
+    catchUp: "caught up",
+  },
+  form: {
+    newTitle: "New bot",
+    editTitle: "Edit bot",
+    name: "Name",
+    prompt: "Prompt",
+    promptHint:
+      "Sent as it is, into a new chat, every run. Write it the way you would ask in a chat.",
+    when: "When",
+    daily: "At a time",
+    every: "Every few hours",
+    hours: "{count} hours",
+    hours_one: "Every hour",
+    days: "Days",
+    checkout: "Runs in",
+    account: "Account",
+    defaultAccount: "Default account",
+    model: "Model",
+    permission: "Permission",
+    quiet: "Stay quiet when there is nothing to report",
+    quietHint:
+      "The run is asked to end on NOTHING_TO_REPORT when nothing needs you; such a run is neither unread nor notified.",
+    enabled: "On schedule",
+    cancel: "Cancel",
+    save: "Save",
+    saving: "Saving…",
+  },
+  delete: {
+    title: "Delete {name}?",
+    detail: "The chats its runs opened stay in the project.",
+    confirm: "Delete",
+  },
+}

@@ -270,6 +270,17 @@ learnings…`, its dialog, `main/learnings.ts`, `shared/learnings.ts` and the
   somebody still has to press Commit on. `docs/design.md` § Committing has the
   argument.
 
+- **`bots.ts`** — **bots**: a saved prompt sent into a new chat of its
+  project on a schedule (a time of day or every few hours, on chosen weekdays
+  — `shared/bots.ts`), only while the app is open, a missed time owed one
+  `catch-up` run. Every run is an ordinary chat through `Chats.create` /
+  `send`, which is what lets it past the helper-turn rule. A run ending on
+  `NOTHING_TO_REPORT` is `quiet`: `ipc.ts` holds a run's `done` notice
+  (`Bots.holds`) and the renderer drops its unread dot. Never `Ask`. A
+  project's `Bots` button opens its `bots` tab (`components/studio/bots/`,
+  `lib/bots/store.ts`), state in `workspace/bots.json`. Free of `electron`
+  (`test/bots.ts`); `docs/design.md` § Bots.
+
 - **`content-search.ts`** — the left column's Search (`Find in files`): a query
   with `Aa` / `ab` / `.*` over every file under the workspace's folders and what
   was said in every chat (`Chats.search`), one channel

@@ -45,6 +45,7 @@ import {
 import { cookiesIn, MAX_COOKIE_FILE_BYTES, keptAs } from "./browser-cookies"
 import { cookieSites, cookieSources, sourceCookies } from "./browser-import"
 import { BrowserHub, browserServer } from "./browser-hub"
+import { Bots } from "./bots"
 import { Chats } from "./chat"
 import { checkKey, restSource } from "./clickup"
 import { ClickupInbox } from "./clickup-inbox"
@@ -367,12 +368,48 @@ export function createIpc(host: Host): {
     (event) => {
       send(IPC.chatEvent, event)
       const notice = notices.read(event)
-      void announce(notice)
+      // A bot's run going quiet is the bot's to announce or not, once it has
+      // read the reply (`reported` below) — a run that ended on
+      // `NOTHING_TO_REPORT` is one nobody is called back to.
+      if (!(notice?.kind === "done" && bots.holds(event.chatId))) {
+        void announce(notice)
+      }
+      bots.onChatEvent(event)
       holdAwake()
     }
   )
 
   const notices = new ChatNotices()
+
+  /*
+   * Bots — a saved prompt sent into a new chat of its project on a schedule
+   * (`main/bots.ts`, `docs/design.md` § Bots). Every run is a chat made the
+   * way the renderer makes one, so the column, the unread dot and the notice
+   * treat it as any other.
+   */
+  const bots = new Bots({
+    read: () => store.readBots(),
+    write: (records) => store.writeBots(records),
+    folderIds: async () =>
+      (await store.getWorkspace()).folders.map((folder) => folder.id),
+    start: async ({ chatId, folderId, title, options, message }) => {
+      await allChats.create({ folderId }, { id: chatId, title, options })
+      // Not awaited past the write of the user line: `send` holds until the
+      // session has taken the message, and a refusal is a line in the chat.
+      void allChats
+        .send(chatId, message)
+        .catch((error: unknown) => console.error("A bot's run failed", error))
+    },
+    busy: (chatId) => allChats.busy().includes(chatId),
+    reported: (chatId) => void announce({ kind: "done", chatId }),
+    onChange: (records) => send(IPC.botsChanged, records),
+  })
+  bots.start()
+
+  handle(IPC.bots, () => bots.list())
+  handle(IPC.saveBot, (_event, input: unknown) => bots.save(input))
+  handle(IPC.deleteBot, (_event, id: unknown) => bots.remove(String(id)))
+  handle(IPC.runBot, (_event, id: unknown) => bots.runNow(String(id)))
 
   /*
    * The machine stays up while any chat is working. Asked of the live sessions
@@ -973,6 +1010,7 @@ export function createIpc(host: Host): {
     // `busy: false`, so the watcher would keep it as working for the rest of
     // the run and swallow the first quiet of whatever reused the id.
     notices.forget(id)
+    bots.forget(id)
     const deleted = allChats.delete(id)
     // `delete` takes the session out of the map before its first await.
     holdAwake()
