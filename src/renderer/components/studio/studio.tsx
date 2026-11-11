@@ -36,7 +36,6 @@ import { useProjects } from "@/lib/projects"
 import { useWorkspaceSearch } from "@/lib/workspace-search"
 import { useClaudeProfiles } from "@/lib/chat/claude-profiles"
 import { useBrowser } from "@/lib/browser/store"
-import { useInbox } from "@/lib/inbox/store"
 import { useBots } from "@/lib/bots/store"
 import { useChats } from "@/lib/chat/store"
 import { badgeCount } from "@/lib/chat/unread"
@@ -49,7 +48,6 @@ import { FileTree } from "./files/file-tree"
 import { IconButton } from "./icon-button"
 import { ChangesPane } from "./files/changes-pane"
 import { GitGraphPane } from "./files/git-graph-pane"
-import { InboxPane } from "./inbox/inbox-pane"
 import { BotsPane } from "./bots/bots-pane"
 import { FileWorkspace } from "./files/file-workspace"
 import { AddFolderDialog } from "./add-folder-dialog"
@@ -82,8 +80,6 @@ function paneView(pane: Pane) {
       return <ChangesPane />
     case "graph":
       return <GitGraphPane />
-    case "inbox":
-      return <InboxPane />
     case "bots":
       return <BotsPane />
     case "chat":
@@ -135,12 +131,6 @@ export function Studio() {
   // A chat's browser opened by its own `claude` — the studio's window only,
   // since a popped-out chat has no browser panel.
   useEffect(() => useBrowser.getState().listen(), [])
-  // Each project's ClickUp inbox, polled in main — subscribed for the button's
-  // badge, whether or not a tab is open.
-  useEffect(() => {
-    void useInbox.getState().load()
-    return useInbox.getState().listen()
-  }, [])
   // Every project's bots, run in main — subscribed whether or not a tab is
   // open, since a run's push is what brings its chat into the column.
   useEffect(() => {

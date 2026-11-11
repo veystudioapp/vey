@@ -9,7 +9,8 @@ import { useStudio } from "../store"
 /**
  * Every project's bots as main last pushed them (`main/bots.ts`), and the
  * `Bots` tabs: one per project, whose id **is** the project's folder id —
- * the inbox's shape (`lib/inbox/store.ts`). `docs/design.md` § Bots.
+ * the shape `Git Graph` has (`lib/files/git-graph.ts`). `docs/design.md`
+ * § Bots.
  */
 
 /** The form, open over one project's tab: a bot being edited, or a new one
@@ -91,8 +92,8 @@ export const useBots = create<BotsState>((set, get) => ({
       selectedId: projectId,
     })
     useStudio.getState().showPane("bots")
-    // Onto the project unless one of its worktrees is already picked — the
-    // inbox's rule, for the inbox's reason.
+    // Onto the project unless one of its worktrees is already picked: the tab
+    // is the project's, and a worktree being worked in is still that project.
     const { folders } = useStudio.getState()
     const active = folders.find(
       (folder) => folder.id === useProjects.getState().activeFolderId

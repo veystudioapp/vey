@@ -284,9 +284,6 @@ export function registerIpc(
         return null
       }
     },
-    openExternal(url) {
-      void shell.openExternal(url)
-    },
     fetch: (url, init) => net.fetch(url, init),
     // The keychain's key where there is one. Without it — a Linux desktop with
     // no secret service — the text is kept as it is and marked so, rather

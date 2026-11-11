@@ -49,7 +49,7 @@ export type BotDeps = {
   read: () => Promise<Bot[]>
   write: (bots: Bot[]) => Promise<void>
   /** The workspace's folder ids: a bot whose checkout has left is kept and
-   * not run, the way an inbox is kept and not polled. */
+   * not run, so putting the folder back picks it up again. */
   folderIds: () => Promise<string[]>
   /** Opens a chat with id `chatId` in `folderId`, named `title`, on
    * `options`, and sends `message` into it. Resolves once it is written down

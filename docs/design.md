@@ -765,8 +765,8 @@ sight of the chat that is driving it.
 A saved prompt sent into a **new chat of its project** on a schedule
 (`main/bots.ts`, `shared/bots.ts`, `components/studio/bots/`,
 `lib/bots/store.ts`; `test/bots.ts`). Asked for by the person using the app,
-on the model of Grok's scheduled tasks. A project's `Bots` button, beside its
-`Inbox`, opens its `Bots` tab: each bot with its schedule, its next run, `Run
+on the model of Grok's scheduled tasks. A project's `Bots` button, beside
+`+ Chat`, opens its `Bots` tab: each bot with its schedule, its next run, `Run
 now`, a switch, and its last runs, each a link to the chat it opened.
 
 **Why this is not a helper turn.** The rule this app holds — no feature calls
@@ -814,7 +814,7 @@ chat is still in the column, for anybody who wants to check.
 `Plan` / `Read only` / `Edits` / `Full access` and main narrows `ask` to
 `read`. A run that stops on a question anyway — an `Edits` MCP call — is a
 chat in `Needs you`, which is exactly what that section is for. A bot whose
-checkout has left the workspace is kept and passed over, like an inbox.
+checkout has left the workspace is kept and passed over.
 
 ## The dock
 
@@ -2207,182 +2207,24 @@ repository, so it was a duplicate of the team's tracker or its stale half.
 A poll of watched tasks with agents assignable to them. A second account of
 somebody else's tracker, with a key on the machine and a poll always running.
 
-### The ClickUp inbox
+### The ClickUp inbox, removed
 
-Asked for by the person using the app, which answers "a second account of
-somebody else's tracker" the way it answered "not used" for worktrees: the
-tracker is where the team works, and what was missing was being told when it
-moved without keeping ClickUp open. So it came back narrower than the watcher.
-Not pasted tasks and not agents — **one list per project**, and what reaches
-the inbox is what the poll already has in hand: a task new to the list; its
-status, title, description, priority, due date, tags or assignees changed —
-with an assignment **to you** its own kind; a comment written, written
-mentioning you, or edited — a reply in a comment's thread included. Otherwise
-only what costs no request beyond the list's page and the comments: a
-checklist, an attachment or a custom field is a request per task, and a due
-date drawing near is not a change.
-Read-only, both ways: nothing is written to ClickUp.
-
-"You" is the signed-in user, asked once per sign-in (`clickup_get_user`,
-`whoAmI`). It
-makes an assignment that adds you `assigned-me`, a comment whose rich text
-tags you (`mentionsIn`, a block of `type: "tag"`) `mention`, a task assigned
-to you `mine` and a comment you wrote or a task you made `byMe`.
-
-**Who did it is named only where ClickUp says.** A comment has its author and
-a task its `creator`, so a new task and a comment carry `by`. Who moved a
-status, retitled a task, or changed its assignees is not in the v2 API at
-all — a task has no history there; only a webhook's `history_items` name the
-user. A webhook needs a public HTTPS address to post to, which a desktop app
-does not have, so it would mean a relay through the studio's server and an
-admin's say in the ClickUp workspace. Until that is asked for, those items
-name nobody, and `Hide what I did myself` covers comments and new tasks
-alone, as its hint says. Unknown, the poll goes on
-without those. A task made already assigned to you is said twice — new, and
-assigned to you — or an inbox listing only the latter would never hear of it.
-
-**An item opened shows the change, not the task.** The first version read the
-task fresh and drew it — status, assignees, priority, due, description,
-comments — which was ClickUp's page again, with what had actually changed left
-to be found in it. So an item carries its own before and after: the two
-statuses with their colours, the two titles, the description or the comment
-before and after as a diff in the `Changes` tab's own chrome
-(`inbox/text-diff.tsx`, lazy), a new comment whole, a new task's description.
-The task is `Open in ClickUp`, and nothing is read on opening.
-
-A list link is often a **view's** (`/v/l/2kzkzpr0-438`, what a list's tabs
-show), an opaque id with no list in it, so connecting asks `GET /view/{id}` for
-its parent and refuses a view of a folder or a space (`listRefIn`,
-`resolveList`).
-
-Main polls (`main/clickup-inbox.ts`), because an inbox is for while nobody is
-looking. On each inbox's interval, one list after another: the list's tasks with
-`date_updated_gt` the inbox's `cursor`, then the comments of up to forty of
-them. A task missing from `seen` is new, and only that; a status, name,
-description, priority, due date, or set of tags or assignees (order is not a
-change) unlike `seen`'s changed; a comment dated after the old cursor is
-new. For there to be a before, the description and each comment read are kept
-in `seen` **whole**, cut at `BODY_MAX` (20,000 characters) — a hash was tried
-first and could only say that a text changed. Whitespace alone is not a change
-(`sameText`): ClickUp's editor reflows. A comment has a creation date and no
-edit date, so an edit is a comment already read whose text moved: one never
-read before an edit (the comments are read only for tasks that changed) is
-remembered and not announced. A `seen` entry written as a bare
-status, before titles and descriptions were followed, compares only the status
-until the task next changes. An item's id is what it is about, so one found
-twice is listed once (`foldPoll`, `test/clickup-inbox.ts`).
-
-**Threaded replies were left out first, and that was wrong.** ClickUp lists a
-task's comments without their replies, so a reply cost a request of its own
-and was skipped — and a conversation held in a thread, which is where a team
-answers a question, never reached the inbox at all. Now a comment carries its
-`reply_count`, and a thread is read (`GET /comment/{id}/reply`,
-`clickup_get_threaded_comments`) when that count is not the one it was last
-read at, or — for an edit, which moves no count — when its task changed; at
-most twenty a poll, newest first (`threadTargets`). Its replies fold in beside
-the task's own comments and are the same kinds: a comment, a mention, an
-edit. `seen` keeps each thread's count and texts (`threads`), and a reply
-missing from a thread read before is new whatever its date, since its read may
-have waited behind the cap while the cursor moved on.
-Connecting reads the whole list once into `seen` and announces nothing. The
-cursor is ClickUp's own clock (the newest `date_updated`), so this machine's
-does not matter.
-
-**Comments are not read off the task's date alone.** They were, once: a task's
-comments were read only on the poll that found its `date_updated` moved, and a
-comment edited a second time was never announced — either the edit did not
-move the date, or the read on that poll came back with the text from before
-it, and the cursor was past that update for good. So a task active in the last
-day (`active`, its update or its newest comment, `ACTIVE_MS`) has its comments
-re-read on every poll whatever its date says, the changed tasks first, forty at
-most (`commentTargets`). An edit found that way is dated by the poll, and its
-id is the comment and both texts, so the same edit read twice is one item and
-a second edit is another. A comment written or edited on a task quiet for more
-than a day, without the task's date moving, is still missed until it next
-changes.
-
-`workspace/clickup-inbox.json` holds every project's inbox and is the only
-file.
-
-**ClickUp is read through its own MCP server, signed in with OAuth — or with
-a personal key.** `Sign in with ClickUp` connects this app to `mcp.clickup.com` itself
-(`main/clickup-mcp.ts`): dynamic client registration as a public client, PKCE,
-the code taken on a one-shot `127.0.0.1` port (RFC 8252), scope `read`, the
-grant sealed by `Host.seal` under `clickup.mcpGrant`, one for the workspace
-and never sent back. The calls are `tools/call` over Streamable HTTP, written
-by hand — three requests do not need the SDK's transport and its global
-`fetch` — through `Host.fetch`, so a proxy reaches ClickUp the way the browser
-does. The poll reads through one `ClickupSource`, which is what
-`test/clickup-inbox.ts` fakes.
-
-A sign-in waiting on the browser can be cancelled (`inbox:cancel-sign-in`
-aborts the wait and frees the port), and `Sign out` forgets the grant for
-every project — here only, since ClickUp publishes no revocation endpoint.
-The inboxes stay, unpolled, and pick up again after the next sign-in.
-
-Not the ClickUp connector the user's own `claude` already has, which is what
-was first asked for: its OAuth grant is claude.ai's, held on Anthropic's side,
-and reaching it would mean using the Claude login for something it was not
-given for. Nor OAuth into the **REST** API: the MCP server's token is its own,
-bound to `mcp.clickup.com/mcp` (it holds ClickUp's token behind it), and a
-REST OAuth app needs a client secret, so a server to keep it on — a sign-in
-needing nothing registered was the point.
-
-What it costs: the MCP's task listing carries no description, so each changed
-task is asked for again (`clickup_get_task`, at most 40 a poll) and a connect
-reads none — a description is first diffed on a task's second change after
-connecting. A view link's list is told from the view's own tasks, since the
-MCP has no view lookup. It does **not** know who made a change any better: its
-tools are the same v2 data. ClickUp says its MCP server serves a vetted list
-of clients; registration and the redirect to the consent page went through
-for this app, but consent itself was not tried when this was written. The
-tools answer as text meant for a model; `dataOf` reads it as JSON and says so
-when it is not.
-
-**A personal key, beside it.** The inbox first read the REST API with a
-pasted personal token, and that way stays as the other choice — it was
-deleted for a while and brought back, because the MCP server may refuse a
-client it has not vetted and its answers are a model's text, so the key is
-the way that keeps working when the sign-in does not. One of the two at a
-time: `inbox:set-key` (checked against `GET /user`, sealed under
-`clickup.inboxToken`) empties the grant and a sign-in empties the key, so which
-one the inbox reads through is never a guess; `Sign out` / `Remove key`
-forgets whichever there is. The key reads the full REST data — descriptions
-in the listing, a view resolved by `GET /view` — which the sign-in does not.
-
-The `Inbox` button sits beside `+ Chat`, with the unread count as its badge;
-there is no OS notification and the dock badge does not count it — both were
-offered and not wanted. It opens the project's `inbox` tab, one per project, the
-project's and not a checkout's, so `rootOf` keeps it in the strip on the
-project's worktrees too. Items are marked read by being opened, or all at once.
-
-**The tab reads two ways, and narrows.** `Updates` lists every change, newest
-first; `Tasks` groups them by task (`tasksOf`), each task a row with its count
-and newest change, and opening one draws its history as a timeline of the
-same before-and-after bodies — the history this inbox saw, not ClickUp's,
-which the API does not give. Opening a task reads all of it. Over both, a
-filter bar (`lib/inbox/filter.ts`, `test/inbox-filter.ts`): a search over the
-task, who and what was said; since today, a week, a month, or between two days picked on Chromium's own date input (no date picker of the app's own, and none worth a dependency) — local days, both inclusive (`dayStart`); an assignee — you,
-a person, nobody — read off `assignees` on each item, which an item from
-before that field does not carry and so does not match; a group of kinds; and
-unread only. Grouping is done after filtering. Both are a look, held per
-project for the run, not settings.
-
-**Each inbox has settings** (`InboxSettings`, the gear in its header,
-`inbox/inbox-settings-dialog.tsx`): which of the twelve kinds it shows, in
-three groups (`INBOX_KIND_GROUPS`); two filters — only tasks assigned to you,
-and hiding your own comments; and how often its list is checked — 1 to 60
-minutes, two by default. `shows` in `shared/inbox.ts` is the one rule: an
-`assigned-me` or a `mention` switched off falls back to the broader kind it is
-a case of, and `Only mine` still lets through what names you. Per project,
-since each follows a different list with a different pace. Narrowed in main
-(`inboxSettingsOf` in `shared/inbox.ts`), stored on the record and kept across a
-change of list. A kind switched off is **hidden, not dropped**: the poll still
-records it and `viewOf` filters it out, so switching it back on brings its
-items back, and `Mark all read` leaves a hidden kind's unread alone. The one
-saving is comments: with no comment kind on, none are read. The timer
-ticks every minute and polls an inbox once its interval has passed since it
-was last tried — tried, not answered, so a refused key waits like the rest.
+One ClickUp list per project, polled in main, every change to it an item
+with its own before and after — new tasks, statuses, titles, descriptions,
+priorities, due dates, tags, assignees, comments, mentions and edits — read
+through a sign-in to ClickUp's own MCP server or a personal key. Deleted on
+the word of the person it was built for, after using it: it was **a list of
+events**, and what following a project closely needs is the reading of them —
+what was decided, what changed in the spec, which question is still waiting
+on whom. An AI summary per item was tried on top and made each item quicker
+to read without changing that; the reading was still somebody's, one item at
+a time. It also saw one list, could not say who changed a status or a
+description (ClickUp's v2 API does not), and missed a comment on a task quiet
+for a day. A **bot** (§ Bots) with a daily prompt over the tracker, through
+the user's own ClickUp connector, does the reading and is not limited to one
+list. Nothing reads `workspace/clickup-inbox.json` or the sealed
+`clickup.mcpGrant` / `clickup.inboxToken` settings any more, and nothing
+deletes them; `host.openExternal`, which only the sign-in used, went with it.
 
 ### Worktrees, removed
 

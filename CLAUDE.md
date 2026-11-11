@@ -626,25 +626,14 @@ the team already keeps or the stale half of a pair. What stays on disk stays:
 nothing reads `workspace/board.json` or `workspace/board-columns.json` any more,
 and nothing deletes them either.
 
-**A project has a ClickUp inbox** — the watcher it replaces stays deleted
-(watched tasks, agents on them; nothing reads `clickup-watches.json` or
-`clickup.token`). One list per project, polled on its own interval (its settings — kinds shown, minutes — in `shared/inbox.ts`) by
-`main/clickup-inbox.ts` (read-only — the REST API and the shapes in
-`main/clickup.ts`, the MCP in `main/clickup-mcp.ts`, `fetch` handed in as
-`Host.fetch`): a new task, a status, title or description
-changed, priority, due date, tags or assignees moved (an assignment to the
-key's own user its own kind), a comment written, mentioning that user or
-edited become items in `workspace/clickup-inbox.json`, with what the next poll diffs
-against (`seen`, `cursor`) kept in main. ClickUp is read one of two ways
-(`ClickupSource`): a **sign-in to ClickUp's own MCP server** (OAuth with PKCE
-on a loopback port, the tools called over Streamable HTTP by hand), sealed
-under `clickup.mcpGrant`, or a personal key on the REST API (`restSource`),
-sealed under `clickup.inboxToken`; saving one empties the other, neither is
-sent back. Not the user's `claude` connector, whose grant is claude.ai's. The `Inbox` button beside `+ Chat`
-carries the unread count and opens the project's `inbox` tab
-(`components/studio/inbox/inbox-pane.tsx`, `lib/inbox/store.ts`; one per
-project, its `rootOf` following the project's worktrees). No notification, no
-write to ClickUp. `docs/design.md` § The ClickUp inbox (`test/clickup-inbox.ts`).
+**There is no ClickUp inbox** — the per-project list of a ClickUp list's
+changes is deleted with its watcher before it: `main/clickup-inbox.ts`,
+`clickup.ts`, `clickup-mcp.ts` (its own OAuth sign-in), `shared/inbox.ts`, the
+`inbox` pane and tab, the `Inbox` button and the twelve `inbox:*` channels. It
+was a list of events, and following a project needs them read — a bot over the
+tracker does that (`docs/design.md` § The ClickUp inbox, removed). Nothing
+reads `workspace/clickup-inbox.json`, `clickup-watches.json` or the sealed
+`clickup.*` settings, and nothing deletes them.
 
 **There is no `From template`** — `Add project` is two choices, `Browse…` an
 existing folder or `New directory…`, an **empty** one made where the system's

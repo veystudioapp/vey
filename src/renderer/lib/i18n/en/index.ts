@@ -2,7 +2,6 @@ import { bots } from "./bots"
 import { chat } from "./chat"
 import { common } from "./common"
 import { files } from "./files"
-import { inbox } from "./inbox"
 import { nav } from "./nav"
 import { onboarding } from "./onboarding"
 import { projects } from "./projects"
@@ -22,7 +21,6 @@ export const en = {
   chat,
   transcript,
   files,
-  inbox,
   bots,
   onboarding,
 }

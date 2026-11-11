@@ -12,7 +12,6 @@ import {
   type TreeChange,
   type MenuCommand,
   type ChatEvent,
-  type ProjectInbox,
   type Bot,
   type TerminalExit,
   type TerminalOutput,
@@ -276,23 +275,6 @@ const api: DesktopApi = {
   installPlugin: (source) => ipcRenderer.invoke(IPC.installPlugin, source),
   removePlugin: (id) => ipcRenderer.invoke(IPC.removePlugin, id),
 
-  inboxes: () => ipcRenderer.invoke(IPC.inboxes),
-  inboxAuth: () => ipcRenderer.invoke(IPC.inboxAuth),
-  inboxSetKey: (token) => ipcRenderer.invoke(IPC.inboxSetKey, token),
-  inboxSignIn: () => ipcRenderer.invoke(IPC.inboxSignIn),
-  inboxCancelSignIn: () => ipcRenderer.invoke(IPC.inboxCancelSignIn),
-  inboxSignOut: () => ipcRenderer.invoke(IPC.inboxSignOut),
-  inboxConnect: (folderId, list) =>
-    ipcRenderer.invoke(IPC.inboxConnect, folderId, list),
-  inboxDisconnect: (folderId) =>
-    ipcRenderer.invoke(IPC.inboxDisconnect, folderId),
-  inboxMarkRead: (folderId, itemIds) =>
-    ipcRenderer.invoke(IPC.inboxMarkRead, folderId, itemIds),
-  inboxRefresh: (folderId) => ipcRenderer.invoke(IPC.inboxRefresh, folderId),
-  inboxSetSettings: (folderId, settings) =>
-    ipcRenderer.invoke(IPC.inboxSetSettings, folderId, settings),
-  onInboxChanged: (listener) =>
-    subscribe<ProjectInbox[]>(IPC.inboxChanged, listener),
   bots: () => ipcRenderer.invoke(IPC.bots),
   saveBot: (input) => ipcRenderer.invoke(IPC.saveBot, input),
   deleteBot: (id) => ipcRenderer.invoke(IPC.deleteBot, id),

@@ -15,8 +15,6 @@ export const PREFIX: Record<Pane, string> = {
   changes: "changes:",
   // A root id too: one `Git Graph` tab per project.
   graph: "graph:",
-  // A project's folder id: one `Inbox` tab per project.
-  inbox: "inbox:",
   // A project's folder id: one `Bots` tab per project.
   bots: "bots:",
   chat: "chat:",

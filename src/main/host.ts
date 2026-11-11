@@ -99,10 +99,6 @@ export type Host = {
     cookies: ImportedCookie[]
   ) => Promise<{ set: number; failed: number }>
 
-  /** Opens a URL in the user's browser. Only for a URL this app built itself —
-   * the free AI server's sign-in page — since the caller is not reviewing it. */
-  openExternal: (url: string) => void
-
   /**
    * `fetch` through Chromium's network stack (`net.fetch`) rather than Node's:
    * the system proxy, a VPN's routes and the OS's certificates, exactly as the

@@ -2,7 +2,6 @@ import { chatRootId } from "@shared/api"
 
 import { useChanges } from "./files/changes"
 import { useGitGraph } from "./files/git-graph"
-import { useInbox } from "./inbox/store"
 import { useBots } from "./bots/store"
 import { projectOf } from "./project-checkouts"
 import { useFiles } from "./files/store"
@@ -108,13 +107,6 @@ const graphActive = (
     ? state.selectedId
     : null
 
-const inboxActive = (
-  state: ReturnType<typeof useInbox.getState>
-): string | null =>
-  state.selectedId && state.openIds.includes(state.selectedId)
-    ? state.selectedId
-    : null
-
 const botsActive = (
   state: ReturnType<typeof useBots.getState>
 ): string | null =>
@@ -123,11 +115,11 @@ const botsActive = (
     : null
 
 /**
- * An inbox is a **project's**, not a checkout's, so while one of that
+ * A bots tab is a **project's**, not a checkout's, so while one of that
  * project's worktrees is the root being worked in, the tab belongs to it too —
  * the project's own id alone would drop it from the strip on every worktree.
  */
-const inboxRootOf = (id: string): string | null => {
+const projectRootOf = (id: string): string | null => {
   const root = activeRootId()
   const { folders } = useStudio.getState()
   const folder = folders.find((entry) => entry.id === root)
@@ -181,17 +173,7 @@ const PANELS: Record<Pane, PanelTabs> = {
     // A root id, as `changes`'s is.
     rootOf: (id) => id,
   },
-  inbox: {
-    open: () => useInbox.getState().openIds,
-    active: () => inboxActive(useInbox.getState()),
-    select: (id) => useInbox.getState().select(id),
-    close: (id) => useInbox.getState().close(id),
-    closeOthers: (id) => useInbox.getState().closeOthers(id),
-    closeAll: () => useInbox.getState().closeAll(),
-    reorder: (ids) => useInbox.getState().reorder(ids),
-    rootOf: inboxRootOf,
-  },
-  // A project's, like its inbox — and followed onto its worktrees the same way.
+  // A project's, and followed onto its worktrees — see `projectRootOf`.
   bots: {
     open: () => useBots.getState().openIds,
     active: () => botsActive(useBots.getState()),
@@ -200,7 +182,7 @@ const PANELS: Record<Pane, PanelTabs> = {
     closeOthers: (id) => useBots.getState().closeOthers(id),
     closeAll: () => useBots.getState().closeAll(),
     reorder: (ids) => useBots.getState().reorder(ids),
-    rootOf: inboxRootOf,
+    rootOf: projectRootOf,
   },
   files: {
     open: () => useFiles.getState().openIds,
@@ -463,7 +445,6 @@ function usePanelActive(pane: Pane): string | null {
     files: useFiles(fileActive),
     changes: useChanges(changesActive),
     graph: useGitGraph(graphActive),
-    inbox: useInbox(inboxActive),
     bots: useBots(botsActive),
     chat: useChats(chatActive),
   }[pane]
@@ -505,7 +486,6 @@ export function useHasOpenTabs(): boolean {
   useChats((state) => state.chats)
   useChanges((state) => state.openIds)
   useGitGraph((state) => state.openIds)
-  useInbox((state) => state.openIds)
   useBots((state) => state.openIds)
 
   // Every pane in `PANES`, and the reason this is worth saying: a panel left out
