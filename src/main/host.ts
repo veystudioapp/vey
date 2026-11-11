@@ -1,3 +1,4 @@
+import type { AttentionChat, Bot } from "../shared/api"
 import type { CookieSite } from "../shared/browser"
 import type { ImportedCookie } from "./browser-cookies"
 import type { BrowserPage } from "./browser-hub"
@@ -114,9 +115,18 @@ export type Host = {
   seal: (text: string) => string
   unseal: (sealed: string) => string | null
 
-  /** The number on the app's own icon — the dock's red badge on macOS, the
-   * launcher's count on Linux. Zero clears it. */
-  setBadgeCount: (count: number) => void
+  /** The chats that want the user: their number on the app's own icon — the
+   * dock's red badge on macOS, the launcher's count on Linux — and their
+   * names in the menu bar icon's menu, where there is one. Empty clears both. */
+  setAttention: (chats: AttentionChat[]) => void
+  /** Every bot, for the menu bar icon's menu — handed over on each change
+   * rather than asked for, since the menu is built on a click and cannot
+   * wait on a read. */
+  setBots: (bots: Bot[]) => void
+  /** Opening at login, hidden in the menu bar — the OS's own login item. Null
+   * where it is not offered: anything but a packaged macOS build, where the
+   * window is not hidden on close and a dev run would register Electron. */
+  openAtLogin: { get: () => boolean; set: (on: boolean) => void } | null
 
   /** Holds the machine off idle sleep while `on` — a chat is working — and
    * lets it go again. The display may still dim and sleep; a lid closed or

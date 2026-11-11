@@ -9,6 +9,8 @@ export const settings = {
     tabsBlurb: "The tab strip and the editor.",
     updates: "Updates",
     updatesBlurb: "Version, updates and usage counts.",
+    background: "Menu bar",
+    backgroundBlurb: "Keeping Vey running for its bots.",
   },
   appearance: {
     language: "Language",
@@ -47,6 +49,15 @@ export const settings = {
   tabs: {
     allProjectTabs: "Show tabs from every project",
     allProjectTabsDescription: "Off: only the project you are working in.",
+  },
+  background: {
+    closing: "Closing the window",
+    closingDescription:
+      "On macOS, closing the window keeps Vey running in the menu bar, so bots still run. Quit from the menu bar icon or with ⌘Q.",
+    openAtLogin: "Open at login",
+    openAtLoginDescription:
+      "Starts Vey in the menu bar, with no window, when you log in, so bots run after a restart.",
+    openAtLoginUnavailable: "Only in the installed macOS app.",
   },
   updates: {
     version: "Version",

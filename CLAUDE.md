@@ -110,11 +110,17 @@ imports may reach `electron`.
   it), a failure, a question. Free of `electron` so `test/notify.ts` can import
   it; `ipc.ts` rings the bell, only while the window is unfocused, and the click
   comes back as `IPC.revealChat`.
-- **There is no menu bar tray** any more — the app's **dock icon carries a red
-  badge** instead, Slack's way: chats unread or stopped on a question
-  (`badgeCount` in `lib/chat/unread.ts`), sent by the studio's window
-  alone through `IPC.setBadgeCount` to `app.setBadgeCount`, because `unread` is
-  the renderer's. `docs/design.md` § The dock badge, § The menu bar, removed.
+- The app's **dock icon carries a red badge**, Slack's way: chats unread or
+  stopped on a question (`attentionOf` in `lib/chat/unread.ts`), sent by the
+  studio's window alone through `IPC.setAttention`, because `unread` is the
+  renderer's. **Closing the studio's window on macOS hides it into the menu
+  bar** (`hideToMenuBar` / `syncDock` in `main.ts`) so the bots keep running:
+  the window is hidden, never destroyed, until `quitting` (⌘Q, the tray's
+  Quit, `before-quit-for-update`). `main/tray.ts` is the icon — the mark, a
+  red dot for the same chats — and `main/tray-menu.ts` its menu, pure
+  (`test/tray-menu.ts`). `Open at login` is the OS's login item
+  (`IPC.openAtLogin`), packaged macOS only. `docs/design.md` § The dock
+  badge, § The menu bar, for bots.
 - **`files.ts`** — every `files:*` call goes through `insideAny`, which is what
   keeps an absolute path from the renderer inside the roots the workspace was
   pointed at. Deleting is `shell.trashItem`, never `unlink`. `fileRoots` in

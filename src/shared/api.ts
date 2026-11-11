@@ -1039,6 +1039,11 @@ export type ChatAskQuestion = {
   multiSelect: boolean
 }
 
+/** A chat that wants the user, for the dock badge and the menu bar's
+ * `Needs you` (`attentionOf` in `lib/chat/unread.ts`). `waiting` is stopped
+ * on a question; otherwise it answered and nobody has read it. */
+export type AttentionChat = { id: string; title: string; waiting: boolean }
+
 /**
  * A turn waiting on the user: the thing print mode could not have.
  *
@@ -2864,11 +2869,20 @@ export type DesktopApi = {
   /** Whether the calling window is pinned. */
   isAlwaysOnTop: () => Promise<boolean>
   /**
-   * The red number on the app's dock icon, the way Slack's is: how many chats
-   * want the user — answered and not yet read, or stopped on a question. Zero
-   * clears it. Sent by the studio's window alone, which holds `unread`.
+   * The chats that want the user — answered and not yet read, or stopped on
+   * a question. Their number is the red badge on the app's dock icon, the way
+   * Slack's is, and the list is the menu bar icon's `Needs you`. Empty clears
+   * both. Sent by the studio's window alone, which holds `unread`.
    */
-  setBadgeCount: (count: number) => Promise<void>
+  setAttention: (chats: AttentionChat[]) => Promise<void>
+  /**
+   * Whether the app opens, hidden in the menu bar, when the user logs in —
+   * so the bots run after a restart without anybody opening it. Asked of the
+   * OS, not kept as a setting. Null where it cannot be offered: anything but
+   * a packaged macOS build.
+   */
+  openAtLogin: () => Promise<boolean | null>
+  setOpenAtLogin: (on: boolean) => Promise<boolean | null>
   /**
    * The left column's Search: `query` across every file in the workspace and
    * everything said in every chat — see `WorkspaceSearch`.
@@ -3449,7 +3463,9 @@ export const IPC = {
   openChatWindow: "window:open-chat",
   setAlwaysOnTop: "window:set-always-on-top",
   isAlwaysOnTop: "window:is-always-on-top",
-  setBadgeCount: "app:set-badge-count",
+  setAttention: "app:set-attention",
+  openAtLogin: "app:open-at-login",
+  setOpenAtLogin: "app:set-open-at-login",
   searchWorkspace: "search:workspace",
   replaceInFiles: "search:replace",
   deleteChat: "chats:delete",

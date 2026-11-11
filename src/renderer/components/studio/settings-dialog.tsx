@@ -20,6 +20,7 @@ import {
   ArrowUpCircle,
   Columns2,
   ExternalLink,
+  PanelTop,
   Palette,
   RefreshCw,
   type LucideIcon,
@@ -132,6 +133,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <AppearanceSection onReplayTour={onClose} />
             ) : section === "tabs" ? (
               <TabsSection />
+            ) : section === "background" ? (
+              <BackgroundSection />
             ) : (
               <UpdatesSection />
             )}
@@ -142,7 +145,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-type SectionId = "appearance" | "tabs" | "updates"
+type SectionId = "appearance" | "tabs" | "background" | "updates"
 
 /** The sections, in the order they are listed. Each one is a heading, a line
  * saying what it covers, and the rows below — kept together so adding a
@@ -164,6 +167,12 @@ const SECTIONS: {
     label: "settings.sections.tabs",
     blurb: "settings.sections.tabsBlurb",
     icon: Columns2,
+  },
+  {
+    id: "background",
+    label: "settings.sections.background",
+    blurb: "settings.sections.backgroundBlurb",
+    icon: PanelTop,
   },
   {
     id: "updates",
@@ -471,6 +480,49 @@ function TabsSection() {
         description={t("settings.tabs.allProjectTabsDescription")}
       >
         <Switch checked={allProjectTabs} onCheckedChange={setAllProjectTabs} />
+      </Row>
+    </Card>
+  )
+}
+
+/**
+ * Running in the menu bar, for the bots (`docs/design.md` § The menu bar, for
+ * bots). Closing the window into the menu bar has no switch — it is what
+ * keeps a bot running, and ⌘Q is the way out — so its row only says so.
+ * `Open at login` is the OS's own login item, asked of main each time the
+ * section opens rather than kept as a setting, since System Settings can
+ * take it away without telling anybody.
+ */
+function BackgroundSection() {
+  const t = useT()
+  // `undefined` while asking, `null` where it cannot be offered.
+  const [atLogin, setAtLogin] = useState<boolean | null | undefined>()
+
+  useEffect(() => {
+    void window.desktop.openAtLogin().then(setAtLogin)
+  }, [])
+
+  return (
+    <Card>
+      <Row
+        title={t("settings.background.closing")}
+        description={t("settings.background.closingDescription")}
+      />
+      <Row
+        title={t("settings.background.openAtLogin")}
+        description={
+          atLogin === null
+            ? t("settings.background.openAtLoginUnavailable")
+            : t("settings.background.openAtLoginDescription")
+        }
+      >
+        <Switch
+          checked={atLogin === true}
+          disabled={atLogin == null}
+          onCheckedChange={(on) =>
+            void window.desktop.setOpenAtLogin(on).then(setAtLogin)
+          }
+        />
       </Row>
     </Card>
   )

@@ -38,7 +38,7 @@ import { useClaudeProfiles } from "@/lib/chat/claude-profiles"
 import { useBrowser } from "@/lib/browser/store"
 import { useBots } from "@/lib/bots/store"
 import { useChats } from "@/lib/chat/store"
-import { badgeCount } from "@/lib/chat/unread"
+import { attentionOf } from "@/lib/chat/unread"
 import { Dock } from "./dock"
 import { NavRail } from "./nav-rail"
 import { ProjectDialogs } from "./project/project-actions"
@@ -138,17 +138,24 @@ export function Studio() {
     return useBots.getState().listen()
   }, [])
 
-  // The dock icon's red number. Here rather than in main because `unread` is
-  // this window's — main knows a chat went quiet but not whether anybody has
-  // looked at it since — and here rather than in `ChatWindow` because a
-  // popped-out chat keeps a store of its own, and two senders would fight.
+  // The dock icon's red number and the menu bar's `Needs you`. Here rather
+  // than in main because `unread` is this window's — main knows a chat went
+  // quiet but not whether anybody has looked at it since — and here rather
+  // than in `ChatWindow` because a popped-out chat keeps a store of its own,
+  // and two senders would fight.
   useEffect(() => {
-    let shown = -1
-    const sync = ({ unread, asks }: ReturnType<typeof useChats.getState>) => {
-      const count = badgeCount(unread, asks)
-      if (count === shown) return
-      shown = count
-      void window.desktop.setBadgeCount(count)
+    let shown = ""
+    const sync = ({
+      chats,
+      unread,
+      asks,
+    }: ReturnType<typeof useChats.getState>) => {
+      const wanted = attentionOf(chats, unread, asks)
+      // Every chat event reaches this; only a change in the list goes over.
+      const key = JSON.stringify(wanted)
+      if (key === shown) return
+      shown = key
+      void window.desktop.setAttention(wanted)
     }
     sync(useChats.getState())
     return useChats.subscribe(sync)

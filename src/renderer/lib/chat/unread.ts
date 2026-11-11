@@ -1,4 +1,4 @@
-import type { Chat, ChatEvent } from "@shared/api"
+import type { AttentionChat, Chat, ChatEvent } from "@shared/api"
 
 /**
  * Which chats have answered since anybody last looked at them.
@@ -85,18 +85,31 @@ export function unreadIn(chats: Chat[], unread: Record<string, true>): number {
 }
 
 /**
- * The number on the dock icon: how many chats want the user, the way Slack's
- * badge counts what is waiting to be read.
+ * The chats that want the user — the dock icon's red number, the way Slack's
+ * badge counts what is waiting to be read, and the menu bar icon's `Needs
+ * you` list.
  *
  * Unread **and** stopped on a question — the two things a chat can be holding
- * for somebody — counted once per chat. A chat merely working is not in it:
- * that is a spinner's business, and a badge that is never zero while anything
- * runs is a badge nobody reads. Chats rather than messages, because a turn is
- * one thing to go and look at however many lines it wrote.
+ * for somebody — once per chat. A chat merely working is not in it: that is a
+ * spinner's business, and a badge that is never zero while anything runs is a
+ * badge nobody reads. Chats rather than messages, because a turn is one thing
+ * to go and look at however many lines it wrote. In the column's order, so the
+ * menu reads like the column; a chat not listed (yet) still counts.
  */
-export function badgeCount(
+export function attentionOf(
+  chats: Pick<Chat, "id" | "title">[],
   unread: Record<string, true>,
   asks: Record<string, unknown>
-): number {
-  return new Set([...Object.keys(unread), ...Object.keys(asks)]).size
+): AttentionChat[] {
+  const wanted = new Set([...Object.keys(unread), ...Object.keys(asks)])
+  const titles = new Map(chats.map((chat) => [chat.id, chat.title]))
+  const ordered = [
+    ...chats.map((chat) => chat.id).filter((id) => wanted.has(id)),
+    ...[...wanted].filter((id) => !titles.has(id)),
+  ]
+  return ordered.map((id) => ({
+    id,
+    title: titles.get(id) ?? "",
+    waiting: id in asks,
+  }))
 }

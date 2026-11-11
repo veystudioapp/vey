@@ -17,7 +17,7 @@ import {
   type OpenDialogOptions,
 } from "electron"
 
-import { IPC } from "../shared/api"
+import { IPC, type AttentionChat, type Bot } from "../shared/api"
 import {
   browserCookieSites,
   clearBrowserCookies,
@@ -28,6 +28,9 @@ import { installMacUpdate } from "./electron-updates"
 import type { Host } from "./host"
 import { createIpc } from "./ipc"
 import { clampPercent, kilobytes } from "./system-usage"
+import { MenuBarTray } from "./tray"
+
+const IS_MAC = process.platform === "darwin"
 
 /** The built-in plugins: an `extraResources` entry in a packaged app, and what
  * `scripts/build-plugins.mjs` left in `dist-plugins/` while developing. */
@@ -98,6 +101,9 @@ export function registerIpc(
   const showWindow = (): BrowserWindow | null => {
     const window = getWindow()
     if (!window || window.isDestroyed()) return null
+    // Closed into the menu bar took the dock icon with it (`main.ts`); a
+    // window on screen with no dock icon cannot be ⌘-Tabbed back to.
+    if (IS_MAC && app.dock && !app.dock.isVisible()) void app.dock.show()
     if (window.isMinimized()) window.restore()
     window.show()
     window.focus()
@@ -158,6 +164,26 @@ export function registerIpc(
    * costs nothing, and keeping it lit all afternoon is a power bill nobody
    * asked for.
    */
+  /*
+   * The menu bar icon, macOS alone: the way back once the window is closed
+   * into it (`main.ts`). What it shows arrives before `ready` may have, so it
+   * is kept here and handed over when the icon exists.
+   */
+  let tray: MenuBarTray | null = null
+  let attention: AttentionChat[] = []
+  let bots: Bot[] = []
+  if (IS_MAC) {
+    void app.whenReady().then(() => {
+      tray = new MenuBarTray({
+        show: () => void showWindow(),
+        reveal: revealChat,
+        quit: () => app.quit(),
+      })
+      tray.setAttention(attention)
+      tray.setBots(bots)
+    })
+  }
+
   let awake: number | null = null
   const keepAwake = (on: boolean): void => {
     if (on && awake === null) {
@@ -265,9 +291,24 @@ export function registerIpc(
     },
     isAlwaysOnTop: (caller) => ownerOf(caller)?.isAlwaysOnTop() ?? false,
 
-    setBadgeCount(count) {
-      app.setBadgeCount(Math.max(0, Math.floor(count)))
+    setAttention(chats) {
+      attention = chats
+      app.setBadgeCount(chats.length)
+      tray?.setAttention(chats)
     },
+    setBots(next) {
+      bots = next
+      tray?.setBots(next)
+    },
+    // `mainAppService`, the default: the app itself as the login item, which
+    // is what `wasOpenedAtLogin` in `main.ts` is then asked about.
+    openAtLogin:
+      IS_MAC && app.isPackaged
+        ? {
+            get: () => app.getLoginItemSettings().openAtLogin,
+            set: (on) => app.setLoginItemSettings({ openAtLogin: on }),
+          }
+        : null,
     keepAwake,
     browserPage(caller, webContentsId) {
       const sender = (caller as IpcMainInvokeEvent | undefined)?.sender
@@ -326,5 +367,5 @@ export function registerIpc(
     )
   }
 
-  return ipc
+  return { ...ipc, showStudio: showWindow }
 }

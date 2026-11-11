@@ -215,9 +215,10 @@ somebody's disk is no longer read.
 
 The app's own icon carries a red number, the way Slack's does: how many chats
 **want you** — unread, or stopped on a question — counted once per chat
-(`badgeCount` in `lib/chat/unread.ts`, tested). A chat merely working
+(`attentionOf` in `lib/chat/unread.ts`, tested). A chat merely working
 is not in it: a badge that is never zero while anything runs is one nobody
-reads. The studio's window sends it (`IPC.setBadgeCount` → `app.setBadgeCount`),
+reads. The studio's window sends the chats themselves (`IPC.setAttention` →
+`app.setBadgeCount` of their number, and the menu bar's `Needs you` below),
 because `unread` is the renderer's — main knows a chat went quiet, not whether
 anybody has looked since — and a popped-out chat's window does not, since it
 keeps a store of its own. No switch: the dock is the app's own icon, not a strip
@@ -237,16 +238,48 @@ held off — closing the lid or choosing Sleep still sleeps. No switch, for the
 notification's reason: whoever walked away from a running chat is who it is
 for, and it lets go the moment the last chat goes quiet.
 
-### The menu bar, removed
+### The menu bar, for bots
 
-There was a tray icon with the working/waiting count beside it and a menu
-naming the chats, behind a `Count the chats in the menu bar` switch. It is
-replaced by the dock badge: the menu bar is a strip shared with the whole
-machine, so it needed a switch to get out of, and it counted what was
-_happening_ where the question somebody glances for is what is _waiting for
-them_. `main/tray.ts`, `ChatNotices.pending()`, `resources/tray*.png` and
-`scripts/tray-icon.mjs` are deleted. Nothing reads the `chats.tray` setting key
-any more, and nothing deletes it.
+**Closing the studio's window on macOS hides it into the menu bar**: the
+window is hidden rather than destroyed, the dock icon goes with it once no
+window of the app is showing (`syncDock` in `main.ts`), and the mark sits in
+the menu bar (`main/tray.ts`). ⌘Q, `Quit Vey` in its menu, a logout and an
+update's install (`before-quit-for-update`) still quit — `quitting` is what
+lets the window close then. Asked for because a bot ran only while the app
+was open, and closing a window is not somebody saying "stop my bots".
+
+Hidden, not closed, because the renderer is what holds `unread`, the badge
+and the terminals; a window made again would start all three from nothing.
+
+The icon is the mark, with a **red dot** while a chat wants somebody — the
+same chats as the dock badge. Clean it is a template image; badged it cannot
+be (a template has no red), so the mark is inked black or white off
+`nativeTheme` (`scripts/tray-icon.mjs`). Beside it, **the number of bots
+switched on** (`setTitle`, `trayTitleOf`) — what the app is being kept running
+for — and nothing when none is, since a `0` is one more thing in a shared
+strip. It was the bots _running_ at first, and that was a number almost never
+there: a run is minutes a day, so the icon said nothing about whether any bot
+was set up. How many are running is the menu's `Bots · 1 running` heading
+instead. Every switch and every run starting and settling is a write that
+reaches the tray, so nothing polls. Its menu, built on each click so a
+bot's next run is worked out when somebody looks (`main/tray-menu.ts`,
+`test/tray-menu.ts`): `Open Vey`, `Needs you` (a question first), the bots
+switched on by their next run, `Quit Vey`. English, like the notifications.
+
+**`Open at login`** (Settings › Menu bar) is the OS's own login item
+(`setLoginItemSettings`), asked of the OS each time rather than kept as a
+setting, since System Settings can take it away. A launch it made
+(`wasOpenedAtLogin`) loads the window hidden and the dock icon off. Packaged
+macOS builds only — a dev run would register Electron itself.
+
+This reverses a deletion. There was a tray icon with the working/waiting
+count and a menu naming the chats, behind a switch; the dock badge replaced
+it, because the menu bar is shared with the whole machine and it counted what
+was _happening_ rather than what was _waiting_. What is different now: it has
+a job the dock cannot do — being the app while it has no window — so it needs
+no switch, and it counts what the badge counts. Nothing reads the old
+`chats.tray` setting key, and nothing deletes it. Windows and Linux still quit
+when the window closes.
 
 ### The chat's loading indicator
 
@@ -781,7 +814,9 @@ What was deleted under that rule stays deleted: the ClickUp watcher's agents
 chained into stages). A bot is neither — it reads nothing in on its own, and
 one run is one chat.
 
-**Local, and only while the app is open.** The alternative was the CLI's own
+**Local, and only while the app is running** — which, since closing the
+window on macOS now leaves it in the menu bar (§ The menu bar, for bots), is
+until ⌘Q, and with `Open at login` across a restart. The alternative was the CLI's own
 cloud routines, which run with the machine off but on a clone, without this
 machine's MCP servers, `gh` login, `.env` or the chat's browser cookies — and
 those are what the uses worth having need: a morning brief off the tracker

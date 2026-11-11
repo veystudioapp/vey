@@ -46,6 +46,7 @@ import { cookiesIn, MAX_COOKIE_FILE_BYTES, keptAs } from "./browser-cookies"
 import { cookieSites, cookieSources, sourceCookies } from "./browser-import"
 import { BrowserHub, browserServer } from "./browser-hub"
 import { Bots } from "./bots"
+import { attentionOf } from "./tray-menu"
 import { Chats } from "./chat"
 import { findFavicon, MAX_FAVICON_BYTES } from "./favicon"
 import { serverUrl } from "./studio-server"
@@ -384,9 +385,13 @@ export function createIpc(host: Host): {
     },
     busy: (chatId) => allChats.busy().includes(chatId),
     reported: (chatId) => void announce({ kind: "done", chatId }),
-    onChange: (records) => send(IPC.botsChanged, records),
+    onChange: (records) => {
+      send(IPC.botsChanged, records)
+      host.setBots(records)
+    },
   })
   bots.start()
+  void bots.list().then(host.setBots, () => {})
 
   handle(IPC.bots, () => bots.list())
   handle(IPC.saveBot, (_event, input: unknown) => bots.save(input))
@@ -721,8 +726,17 @@ export function createIpc(host: Host): {
 
   handle(IPC.isAlwaysOnTop, (caller) => host.isAlwaysOnTop(caller))
 
-  handle(IPC.setBadgeCount, (_event, count: number) => {
-    host.setBadgeCount(count)
+  handle(IPC.setAttention, (_event, chats: unknown) => {
+    host.setAttention(attentionOf(chats))
+  })
+
+  // Asked of the OS each time rather than kept: System Settings › Login Items
+  // can take it away without telling this app.
+  handle(IPC.openAtLogin, () => host.openAtLogin?.get() ?? null)
+  handle(IPC.setOpenAtLogin, (_event, on: unknown) => {
+    if (!host.openAtLogin) return null
+    host.openAtLogin.set(on === true)
+    return host.openAtLogin.get()
   })
 
   // A chat's browser tab saying it has a page, and that it is going. The

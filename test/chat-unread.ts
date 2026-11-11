@@ -1,6 +1,6 @@
 import type { Chat, ChatEvent } from "../src/shared/api"
 import {
-  badgeCount,
+  attentionOf,
   isWatched,
   marksUnread,
   unreadIn,
@@ -156,18 +156,42 @@ section("what a shut project's row counts")
   )
 }
 
-section("what the dock's badge counts")
+section("what the dock's badge and the menu bar count")
 {
-  check("nothing wanted is no badge", badgeCount({}, {}) === 0)
-  check("an unread chat counts", badgeCount({ a: true }, {}) === 1)
-  check("a question up counts", badgeCount({}, { b: {} }) === 1)
+  const listed = [
+    { id: "a", title: "Fix the build" },
+    { id: "b", title: "Review" },
+    { id: "c", title: "Notes" },
+  ]
+  const ids = (chats: { id: string }[]) => chats.map((chat) => chat.id).join()
+
+  check("nothing wanted is no badge", attentionOf(listed, {}, {}).length === 0)
+  check(
+    "an unread chat counts",
+    attentionOf(listed, { a: true }, {}).length === 1
+  )
+  check("a question up counts", attentionOf(listed, {}, { b: {} }).length === 1)
   check(
     "a chat both unread and asking is one thing to look at",
-    badgeCount({ a: true }, { a: {} }) === 1
+    attentionOf(listed, { a: true }, { a: {} }).length === 1
   )
   check(
-    "and different chats add up",
-    badgeCount({ a: true, c: true }, { b: {} }) === 3
+    "and different chats add up, in the column's order",
+    ids(attentionOf(listed, { c: true, a: true }, { b: {} })) === "a,b,c"
+  )
+  const [asking] = attentionOf(listed, {}, { b: {} })
+  check(
+    "a question is marked waiting, with the chat's title",
+    asking?.waiting === true && asking.title === "Review"
+  )
+  check(
+    "an unread chat is not waiting",
+    attentionOf(listed, { a: true }, {})[0]?.waiting === false
+  )
+  check(
+    "a chat the list does not have yet still counts, untitled",
+    ids(attentionOf(listed, { z: true }, {})) === "z" &&
+      attentionOf(listed, { z: true }, {})[0]?.title === ""
   )
 }
 

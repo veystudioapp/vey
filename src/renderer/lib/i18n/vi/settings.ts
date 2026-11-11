@@ -10,6 +10,8 @@ export const settings: Messages["settings"] = {
     tabsBlurb: "Dải tab và trình soạn thảo.",
     updates: "Cập nhật",
     updatesBlurb: "Phiên bản, cập nhật và số liệu sử dụng.",
+    background: "Thanh menu",
+    backgroundBlurb: "Giữ Vey chạy cho các bot.",
   },
   appearance: {
     language: "Ngôn ngữ",
@@ -48,6 +50,15 @@ export const settings: Messages["settings"] = {
   tabs: {
     allProjectTabs: "Hiện tab của mọi dự án",
     allProjectTabsDescription: "Tắt: chỉ dự án bạn đang làm.",
+  },
+  background: {
+    closing: "Khi đóng cửa sổ",
+    closingDescription:
+      "Trên macOS, đóng cửa sổ thì Vey vẫn chạy trên thanh menu để bot tiếp tục chạy. Thoát hẳn từ biểu tượng trên thanh menu hoặc ⌘Q.",
+    openAtLogin: "Mở khi đăng nhập",
+    openAtLoginDescription:
+      "Khởi động Vey trên thanh menu, không mở cửa sổ, khi bạn đăng nhập — để bot vẫn chạy sau khi khởi động lại máy.",
+    openAtLoginUnavailable: "Chỉ có trong bản macOS đã cài đặt.",
   },
   updates: {
     version: "Phiên bản",

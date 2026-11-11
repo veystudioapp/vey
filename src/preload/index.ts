@@ -189,7 +189,9 @@ const api: DesktopApi = {
   openChatWindow: (chatId) => ipcRenderer.invoke(IPC.openChatWindow, chatId),
   setAlwaysOnTop: (on) => ipcRenderer.invoke(IPC.setAlwaysOnTop, on),
   isAlwaysOnTop: () => ipcRenderer.invoke(IPC.isAlwaysOnTop),
-  setBadgeCount: (count) => ipcRenderer.invoke(IPC.setBadgeCount, count),
+  setAttention: (chats) => ipcRenderer.invoke(IPC.setAttention, chats),
+  openAtLogin: () => ipcRenderer.invoke(IPC.openAtLogin),
+  setOpenAtLogin: (on) => ipcRenderer.invoke(IPC.setOpenAtLogin, on),
   searchWorkspace: (query, options, filter) =>
     ipcRenderer.invoke(IPC.searchWorkspace, query, options, filter),
   replaceInFiles: (query, options, replacement, paths) =>

@@ -1,7 +1,7 @@
 import { existsSync, renameSync } from "node:fs"
 import path from "node:path"
 
-import { BrowserWindow, app, nativeTheme, shell } from "electron"
+import { BrowserWindow, app, autoUpdater, nativeTheme, shell } from "electron"
 
 import { BROWSER_PARTITION } from "./electron-browser"
 import { registerIpc } from "./electron-ipc"
@@ -187,6 +187,7 @@ const {
   noteFilePath,
   pluginFilePath,
   telemetry,
+  showStudio,
 } = registerIpc(
   () => mainWindow,
   (chatId) => openChatWindow(chatId)
@@ -241,6 +242,7 @@ function openChatWindow(chatId: string): void {
   window.once("ready-to-show", () => window.show())
   window.on("closed", () => {
     if (chatWindows.get(chatId) === window) chatWindows.delete(chatId)
+    syncDock()
   })
   keepInside(window)
 
@@ -261,7 +263,52 @@ function windowBackground(): string {
   return nativeTheme.shouldUseDarkColors ? "#1b1c1f" : "#fdfdfd"
 }
 
-function createWindow(): void {
+/**
+ * Set once the app is really quitting — ⌘Q, `Quit Vey` in the menu bar, the
+ * OS logging out, an update's install — so the studio's window is let close
+ * instead of being hidden into the menu bar.
+ */
+let quitting = false
+
+// An update's `quitAndInstall` closes every window *before* `before-quit`, so
+// the flag has to be up by then or the hidden window holds the install.
+autoUpdater.on("before-quit-for-update", () => {
+  quitting = true
+})
+
+/**
+ * macOS: the dock icon is shown while any window of the app is, and taken
+ * away once none is — the studio closed into the menu bar and no chat popped
+ * out — so a Vey left running for its bots is the menu bar icon alone, the
+ * way a menu bar app is.
+ */
+function syncDock(): void {
+  if (process.platform !== "darwin" || !app.dock) return
+  const shown = BrowserWindow.getAllWindows().some(
+    (window) => !window.isDestroyed() && window.isVisible()
+  )
+  if (shown && !app.dock.isVisible()) void app.dock.show()
+  else if (!shown && app.dock.isVisible()) app.dock.hide()
+}
+
+/**
+ * Closing the studio on macOS hides it into the menu bar rather than closing
+ * it (`docs/design.md` § The menu bar, for bots). Hidden, not destroyed: the
+ * renderer is what keeps `unread`, the dock badge and the terminals, and a
+ * window made again would start them from nothing. ⌘Q still quits.
+ */
+function hideToMenuBar(window: BrowserWindow): void {
+  // A full-screen window hidden as it is leaves its Space behind, black.
+  if (window.isFullScreen()) {
+    window.once("leave-full-screen", () => hideToMenuBar(window))
+    window.setFullScreen(false)
+    return
+  }
+  window.hide()
+  syncDock()
+}
+
+function createWindow({ hidden = false } = {}): void {
   mainWindow = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -301,7 +348,15 @@ function createWindow(): void {
 
   // Showing the window only once it has painted avoids a blank frame while the
   // studio's WASM payload loads.
-  mainWindow.once("ready-to-show", () => mainWindow?.show())
+  // Opened at login it stays hidden: the renderer still loads, so the badge
+  // and the menu bar's `Needs you` are counted from the start.
+  if (!hidden) mainWindow.once("ready-to-show", () => mainWindow?.show())
+
+  mainWindow.on("close", (event) => {
+    if (process.platform !== "darwin" || quitting) return
+    event.preventDefault()
+    if (mainWindow) hideToMenuBar(mainWindow)
+  })
 
   mainWindow.on("closed", () => {
     mainWindow = null
@@ -346,13 +401,22 @@ void app.whenReady().then(() => {
   servePlugins(pluginFilePath)
   // Before the window, so the menu bar is never Electron's default one.
   installMenu(() => mainWindow)
-  createWindow()
+  // Started by the login item (`IPC.setOpenAtLogin`): into the menu bar, for
+  // the bots, with no window and no dock icon until somebody asks for one.
+  const atLogin =
+    process.platform === "darwin" &&
+    app.isPackaged &&
+    app.getLoginItemSettings().wasOpenedAtLogin
+  if (atLogin) app.dock?.hide()
+  createWindow({ hidden: atLogin })
 
   app.on("activate", () => {
-    // macOS: clicking the dock icon reopens the studio. The *studio* rather
-    // than "any window", because a panel window can outlive it, and the dock
-    // icon has to lead back to the app itself and not to a panel of it.
+    // macOS: clicking the dock icon — or opening the app again from Finder
+    // while it sits in the menu bar — brings the studio back. The *studio*
+    // rather than "any window", because a popped-out chat can outlive it, and
+    // the dock icon has to lead back to the app itself.
     if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+    else if (!mainWindow.isVisible()) showStudio()
   })
 })
 
@@ -369,6 +433,7 @@ let cleanedUp = false
 const CLEANUP_TIMEOUT_MS = 5_000
 
 app.on("before-quit", (event) => {
+  quitting = true
   if (cleanedUp) return
 
   // Quitting is deferred because the asynchronous half of this matters: Electron
