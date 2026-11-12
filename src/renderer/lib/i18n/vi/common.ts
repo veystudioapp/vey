@@ -21,4 +21,7 @@ export const common: Messages["common"] = {
   loading: "Đang tải…",
   search: "Tìm kiếm",
   settings: "Cài đặt",
+  zoomIn: "Phóng to",
+  zoomOut: "Thu nhỏ",
+  zoomFit: "Vừa khung",
 }

@@ -4,15 +4,19 @@ import {
   useRef,
   useState,
   type MouseEvent,
+  type ReactNode,
 } from "react"
 import { markdownToHTML } from "@blocknote/core"
+import { Maximize, ZoomIn, ZoomOut } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { useT } from "@/lib/i18n"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { revealAt } from "@/lib/files/typescript"
 import { useFiles } from "@/lib/files/store"
 import { highlightCodeBlocks } from "@/lib/markdown/highlight"
 import { linkCodeFiles } from "@/lib/markdown/file-links"
+import { renderMermaidBlocks } from "@/lib/markdown/mermaid"
 import { headingSlug, linkOf } from "@/lib/markdown/links"
 import { sanitizeHtml } from "@/lib/markdown/sanitize"
 import { markdownRenderer } from "@/lib/markdown/renderer"
@@ -93,9 +97,10 @@ export function MarkdownView({
 }) {
   const host = useRef<HTMLDivElement>(null)
   const [failed, setFailed] = useState(false)
-  // A copy of the table being viewed, taken when View is pressed: the reply can
-  // keep streaming underneath the dialog, and the table should hold still.
-  const [viewing, setViewing] = useState<HTMLTableElement | null>(null)
+  // A copy of the table or diagram being viewed, taken when View is pressed:
+  // the reply can keep streaming underneath the dialog, and it should hold
+  // still.
+  const [viewing, setViewing] = useState<Viewed | null>(null)
 
   useEffect(() => {
     // The file's own pipeline, and synchronous: `markdownToHTML` is a string
@@ -138,6 +143,7 @@ export function MarkdownView({
         // A frame later, once the parser is in: the text is on screen plain
         // first and coloured when the grammar arrives, the way a file tab is.
         void highlightCodeBlocks(node, () => alive)
+        void renderMermaidBlocks(node, () => alive)
       })
       .catch((error: unknown) => {
         if (!alive) return
@@ -163,9 +169,9 @@ export function MarkdownView({
         ref={host}
         onClick={(event) => {
           if (copyCode(event)) return
-          const table = tableToView(event)
-          if (table) {
-            setViewing(table.cloneNode(true) as HTMLTableElement)
+          const viewed = elementToView(event)
+          if (viewed) {
+            setViewing(viewed)
             return
           }
           if (openFileLink(event)) return
@@ -174,7 +180,7 @@ export function MarkdownView({
         className={cn("markdown-prose", className)}
       />
       {viewing && (
-        <TableDialog table={viewing} onClose={() => setViewing(null)} />
+        <ViewDialog viewed={viewing} onClose={() => setViewing(null)} />
       )}
     </>
   )
@@ -263,44 +269,214 @@ function openFileLink(event: MouseEvent<HTMLDivElement>): boolean {
   return true
 }
 
-/** The table behind a click on a View button, or null for any other click. */
-function tableToView(
-  event: MouseEvent<HTMLDivElement>
-): HTMLTableElement | null {
+/** What a View button opens: a copy of a table, or of a Mermaid diagram. */
+type Viewed = { kind: "table" | "diagram"; node: Element }
+
+/** The table or diagram behind a click on a View button, or null for any other
+ * click. */
+function elementToView(event: MouseEvent<HTMLDivElement>): Viewed | null {
   if (!(event.target instanceof Element)) return null
-  const button = event.target.closest<HTMLButtonElement>(".markdown-table-view")
+  const button = event.target.closest<HTMLButtonElement>(
+    ".markdown-table-view, .markdown-mermaid-view"
+  )
   if (!button || !event.currentTarget.contains(button)) return null
-  return button.parentElement?.querySelector("table") ?? null
+  if (button.classList.contains("markdown-mermaid-view")) {
+    const svg = button.parentElement?.querySelector("svg")
+    if (!svg) return null
+    const copy = svg.cloneNode(true) as SVGSVGElement
+    // Mermaid caps the SVG at its natural width so it never outgrows a reply;
+    // in the dialog it may grow, but only so far — at the dialog's full width a
+    // tall flowchart is a few boxes the size of the screen — and never taller
+    // than the dialog, so the whole diagram is read without scrolling.
+    const natural = copy.viewBox.baseVal?.width
+    copy.style.maxWidth = natural ? `${Math.round(natural * 1.5)}px` : "none"
+    copy.style.maxHeight = "calc(85vh - 3rem)"
+    copy.style.height = "auto"
+    copy.setAttribute("width", "100%")
+    return { kind: "diagram", node: copy }
+  }
+  const table = button.parentElement?.querySelector("table")
+  return table
+    ? { kind: "table", node: table.cloneNode(true) as Element }
+    : null
 }
 
 /**
- * A table opened large. Shown as a copy of the one in the transcript, which is
- * left where it is — the dialog is a second reading of it, not a move.
+ * A table or diagram opened large. Shown as a copy of the one in the
+ * transcript, which is left where it is — the dialog is a second reading of
+ * it, not a move.
  *
  * Mounted only while open (`viewing &&` in the caller), so the copy is taken
  * once and not kept in step with a reply that is still being written.
  */
-function TableDialog({
-  table,
+function ViewDialog({
+  viewed,
   onClose,
 }: {
-  table: HTMLTableElement
+  viewed: Viewed
   onClose: () => void
 }) {
   // A callback ref rather than an effect: the popup is portalled in after this
   // component mounts, so an effect would find no node and never run again.
   const place = useCallback(
-    (node: HTMLDivElement | null) => node?.replaceChildren(table),
-    [table]
+    (node: HTMLDivElement | null) => node?.replaceChildren(viewed.node),
+    [viewed]
   )
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] overflow-auto sm:max-w-[min(60rem,calc(100%-4rem))]">
-        <DialogTitle className="sr-only">Table</DialogTitle>
-        <div ref={place} className="markdown-prose markdown-table-dialog" />
+      <DialogContent
+        className={cn(
+          "max-h-[85vh] sm:max-w-[min(60rem,calc(100%-4rem))]",
+          viewed.kind === "table" ? "overflow-auto" : "overflow-hidden"
+        )}
+      >
+        <DialogTitle className="sr-only">
+          {viewed.kind === "table" ? "Table" : "Diagram"}
+        </DialogTitle>
+        {viewed.kind === "table" ? (
+          <div ref={place} className="markdown-prose markdown-table-dialog" />
+        ) : (
+          <DiagramViewer place={place} />
+        )}
       </DialogContent>
     </Dialog>
+  )
+}
+
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 8
+const STEP = 1.25
+
+type View = { scale: number; x: number; y: number }
+const FIT: View = { scale: 1, x: 0, y: 0 }
+
+/**
+ * A diagram that can be zoomed — the wheel, or the buttons — and dragged. It
+ * opens fitted to the dialog; zoom keeps the point under the cursor still,
+ * which is what makes zooming into one corner of a large flowchart usable.
+ */
+function DiagramViewer({
+  place,
+}: {
+  place: (node: HTMLDivElement | null) => void
+}) {
+  const t = useT()
+  const [view, setView] = useState<View>(FIT)
+  const viewport = useRef<HTMLDivElement | null>(null)
+  const drag = useRef<{ x: number; y: number; id: number } | null>(null)
+
+  /** Zoom by `factor` around a point in the viewport's own coordinates. */
+  const zoomAt = useCallback((factor: number, px?: number, py?: number) => {
+    const box = viewport.current?.getBoundingClientRect()
+    const cx = px ?? (box ? box.width / 2 : 0)
+    const cy = py ?? (box ? box.height / 2 : 0)
+    setView((v) => {
+      const scale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.scale * factor))
+      const k = scale / v.scale
+      return { scale, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k }
+    })
+  }, [])
+
+  // A listener of its own, not `onWheel`: React's is passive, and a wheel that
+  // zooms must not also scroll the page behind the dialog.
+  const attach = useCallback(
+    (node: HTMLDivElement | null) => {
+      viewport.current = node
+      if (!node) return
+      node.addEventListener(
+        "wheel",
+        (event) => {
+          event.preventDefault()
+          const box = node.getBoundingClientRect()
+          // A trackpad pinch arrives as a ctrl-wheel with small deltas.
+          const delta = event.ctrlKey ? event.deltaY * 10 : event.deltaY
+          zoomAt(
+            Math.exp(-delta * 0.002),
+            event.clientX - box.left,
+            event.clientY - box.top
+          )
+        },
+        { passive: false }
+      )
+    },
+    [zoomAt]
+  )
+
+  return (
+    <div className="relative">
+      <div
+        ref={attach}
+        className="h-[calc(85vh-3rem)] cursor-grab touch-none overflow-hidden select-none active:cursor-grabbing"
+        onPointerDown={(event) => {
+          if (event.button !== 0) return
+          event.currentTarget.setPointerCapture(event.pointerId)
+          drag.current = {
+            x: event.clientX,
+            y: event.clientY,
+            id: event.pointerId,
+          }
+        }}
+        onPointerMove={(event) => {
+          const from = drag.current
+          if (!from || from.id !== event.pointerId) return
+          const dx = event.clientX - from.x
+          const dy = event.clientY - from.y
+          drag.current = { ...from, x: event.clientX, y: event.clientY }
+          setView((v) => ({ ...v, x: v.x + dx, y: v.y + dy }))
+        }}
+        onPointerUp={() => (drag.current = null)}
+        onPointerCancel={() => (drag.current = null)}
+        onDoubleClick={() => setView(FIT)}
+      >
+        <div
+          ref={place}
+          className="markdown-prose markdown-mermaid-dialog h-full origin-top-left items-center"
+          style={{
+            transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
+          }}
+        />
+      </div>
+      <div className="absolute right-2 bottom-2 flex items-center gap-0.5 rounded-md border bg-background/90 p-0.5 text-muted-foreground shadow-sm">
+        <ZoomButton
+          label={t("common.zoomOut")}
+          onClick={() => zoomAt(1 / STEP)}
+        >
+          <ZoomOut />
+        </ZoomButton>
+        <span className="w-11 text-center text-xs tabular-nums">
+          {Math.round(view.scale * 100)}%
+        </span>
+        <ZoomButton label={t("common.zoomIn")} onClick={() => zoomAt(STEP)}>
+          <ZoomIn />
+        </ZoomButton>
+        <ZoomButton label={t("common.zoomFit")} onClick={() => setView(FIT)}>
+          <Maximize />
+        </ZoomButton>
+      </div>
+    </div>
+  )
+}
+
+function ZoomButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      onClick={onClick}
+      className="grid size-6 place-items-center rounded hover:bg-accent hover:text-foreground [&_svg]:size-3.5"
+    >
+      {children}
+    </button>
   )
 }
 

@@ -20,4 +20,7 @@ export const common = {
   loading: "Loading…",
   search: "Search",
   settings: "Settings",
+  zoomIn: "Zoom in",
+  zoomOut: "Zoom out",
+  zoomFit: "Fit to window",
 }

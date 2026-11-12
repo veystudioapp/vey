@@ -418,3 +418,74 @@
 .markdown-table-dialog td {
   padding: 0.4rem 0.75rem;
 }
+
+/*
+ * A ```mermaid fence drawn as its diagram (`lib/markdown/mermaid.ts`). The
+ * fence's `<pre>` stays in the DOM, hidden, so its frame's Copy still copies
+ * the source and `⌘F` still finds the words in it.
+ */
+.markdown-prose pre.markdown-mermaid-source {
+  display: none;
+}
+
+.markdown-prose .markdown-mermaid {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  margin: 0 0 0.5rem;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  overflow-x: auto;
+}
+
+/* Inside a fence's frame the frame's bottom margin is the one that counts —
+ * the hidden `<pre>` no longer carries it — and the Copy sits in the
+ * top-right corner, so View moves over beside it. */
+.markdown-prose .markdown-code:has(> .markdown-mermaid) {
+  margin: 0 0 0.5rem;
+}
+
+.markdown-prose .markdown-code > .markdown-mermaid {
+  margin: 0;
+}
+
+.markdown-prose .markdown-mermaid-view {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 0.25rem;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.markdown-prose .markdown-code > .markdown-mermaid .markdown-mermaid-view {
+  right: 2.125rem;
+}
+
+.markdown-prose .markdown-mermaid-view svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.markdown-prose .markdown-code:hover .markdown-mermaid-view,
+.markdown-prose .markdown-mermaid:hover .markdown-mermaid-view,
+.markdown-prose .markdown-mermaid-view:focus-visible {
+  opacity: 1;
+}
+
+.markdown-prose .markdown-mermaid-view:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+.markdown-mermaid-dialog {
+  display: flex;
+  justify-content: center;
+}

@@ -630,6 +630,20 @@ since elsewhere it is CodeMirror's.
 Selecting a run of the transcript shows `Reply`, which types it into the
 composer as a `>` quote, unsent (`quoteOf`, tested).
 
+### Diagrams in a reply
+
+A ` ```mermaid ` fence in a reply is drawn as its diagram
+(`lib/markdown/mermaid.ts`), with a View on hover that opens it large in the
+dialog a table's View uses. The fence's `<pre>` is hidden, not replaced, so the
+frame's Copy still copies the source and `⌘F` still finds its words; a fence
+that does not parse — one still streaming in, or one the agent got wrong —
+stays code. Mermaid is a dynamic import (it was in the bundle already, through
+Excalidraw), rendered with `securityLevel: "strict"`, one render at a time
+because its config is global, and each SVG cached by source and theme because a
+streaming reply rebuilds its DOM on every chunk. A diagram keeps the theme it
+was drawn in until its message re-renders. Only the chat's Milkdown path draws
+them; a `.md` file's preview (BlockNote's path) does not yet.
+
 ### The chat's browser
 
 A page beside the conversation that the chat's `claude` drives and the user
