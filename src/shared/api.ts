@@ -2393,6 +2393,13 @@ export type DesktopApi = {
     message: string
   ) => Promise<GitWriteResult>
   gitCherryPick: (folderId: string, hash: string) => Promise<GitWriteResult>
+  /**
+   * The system bar's branch picker: `HEAD` onto an existing branch, a remote
+   * one (`origin/x`) by way of a local branch tracking it — `switchBranch` in
+   * `main/git.ts`. Names come from `worktreeBranches`; anything else is
+   * refused. Answers rather than rejects, as the writes above do.
+   */
+  gitSwitchBranch: (folderId: string, name: string) => Promise<GitWriteResult>
 
   /**
    * The three writes the Changes list makes — `git add`, its undo, and
@@ -3396,6 +3403,7 @@ export const IPC = {
   gitCreateBranch: "git:create-branch",
   gitCreateTag: "git:create-tag",
   gitCherryPick: "git:cherry-pick",
+  gitSwitchBranch: "git:switch-branch",
   gitStage: "git:stage",
   gitUnstage: "git:unstage",
   gitDiscard: "git:discard",

@@ -1797,6 +1797,40 @@ export async function checkoutDetached(
   return attempt(dir, ["checkout", "--detach", hash])
 }
 
+/**
+ * The system bar's branch picker: `HEAD` onto a branch that already exists —
+ * a local one by its name, a remote one (`origin/x`) as the local branch of
+ * that name, made to track it when there is none yet. Nothing is made but
+ * that tracking branch, and `git switch` refuses where local edits would be
+ * overwritten, which is the Git Graph menu's bargain (`docs/design.md`
+ * § Switching branches from the system bar).
+ *
+ * The name must be one `for-each-ref` lists right now, so nothing typed or
+ * stale reaches git as an argument — and a ref name can never begin with `-`.
+ */
+export async function switchBranch(
+  dir: string,
+  name: string
+): Promise<GitWriteResult> {
+  if (typeof name !== "string" || !name || name.startsWith("-"))
+    return { ok: false, message: "Not a branch." }
+  const refs = await git(dir, [
+    "for-each-ref",
+    "--format=%(refname)",
+    "refs/heads",
+    "refs/remotes",
+  ]).catch(() => "")
+  const listed = new Set(refs.split("\n"))
+  if (listed.has(`refs/heads/${name}`)) return attempt(dir, ["switch", name])
+  if (!listed.has(`refs/remotes/${name}`) || name.endsWith("/HEAD"))
+    return { ok: false, message: `No branch “${name}”.` }
+  // Already made from this remote branch once: going back to it is a switch,
+  // and `--track` would refuse on the name being taken.
+  const local = name.slice(name.indexOf("/") + 1)
+  if (listed.has(`refs/heads/${local}`)) return attempt(dir, ["switch", local])
+  return attempt(dir, ["switch", "--track", name])
+}
+
 /** A branch at a commit, checked out when `checkout` says so. */
 export async function createBranch(
   dir: string,

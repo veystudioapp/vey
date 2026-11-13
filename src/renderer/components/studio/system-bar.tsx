@@ -25,6 +25,7 @@ import { useSystemUsage } from "@/lib/system/usage"
 import { cn } from "@/lib/utils"
 import { useUpdateWatch } from "@/lib/updates"
 import { useT, type Translate } from "@/lib/i18n"
+import { BranchPicker } from "./branch-picker"
 import { Mark } from "./mark"
 import { UpdatePill } from "./update-pill"
 
@@ -183,7 +184,8 @@ function MachineUsage({ usage }: { usage: SystemUsage }) {
  *
  * With where it stands — unpushed, behind, files changed — because those are
  * the questions a branch name is glanced at to answer, and the Explorer that
- * answers them may be shut to its rail. A click opens it on `Changes`.
+ * answers them may be shut to its rail. A click on those opens it on
+ * `Changes`; a click on the name itself switches branch (`BranchPicker`).
  */
 function GitLabel() {
   const folders = useStudio((state) => state.folders)
@@ -223,7 +225,7 @@ function GitLabel() {
     }
   }, [folderId, branch, status])
 
-  if (!shown || !branch) return null
+  if (!shown || !folderId || !branch) return null
 
   const ahead = upstream?.aheadCount ?? 0
   const behind = upstream?.behind ?? 0
@@ -235,28 +237,51 @@ function GitLabel() {
     studio.setGitView("changes")
   }
 
+  // Two buttons: the name switches branch, the figures beside it open
+  // `Changes` — what each one is about is what it opens.
   return (
-    <button
-      type="button"
-      className={cn(ACTION, "shrink")}
-      title={gitTitle(t, branch, shown.path, upstream, changed)}
-      onClick={openChanges}
-    >
-      <GitBranch className="size-3 shrink-0" />
-      <span className="truncate font-mono">{branch}</span>
-      {(ahead > 0 || behind > 0) && (
-        <span className="flex shrink-0 items-center gap-1">
-          {ahead > 0 && <span>↑{ahead}</span>}
-          {behind > 0 && <span>↓{behind}</span>}
-        </span>
+    <span className="flex min-w-0 shrink items-stretch">
+      <BranchPicker
+        folderId={folderId}
+        branch={branch}
+        trigger={
+          <button
+            type="button"
+            className={cn(ACTION, "shrink data-[popup-open]:text-foreground")}
+            title={[
+              branch,
+              shown.path,
+              "",
+              t("nav.systemBar.switchBranch"),
+            ].join("\n")}
+          >
+            <GitBranch className="size-3 shrink-0" />
+            <span className="truncate font-mono">{branch}</span>
+          </button>
+        }
+      />
+      {(ahead > 0 || behind > 0 || changed > 0) && (
+        <button
+          type="button"
+          className={cn(ACTION, "pl-0.5")}
+          title={gitTitle(t, branch, shown.path, upstream, changed)}
+          onClick={openChanges}
+        >
+          {(ahead > 0 || behind > 0) && (
+            <span className="flex shrink-0 items-center gap-1">
+              {ahead > 0 && <span>↑{ahead}</span>}
+              {behind > 0 && <span>↓{behind}</span>}
+            </span>
+          )}
+          {changed > 0 && (
+            <span className="flex shrink-0 items-center gap-1">
+              <FileDiff className="size-3" />
+              {changed}
+            </span>
+          )}
+        </button>
       )}
-      {changed > 0 && (
-        <span className="flex shrink-0 items-center gap-1">
-          <FileDiff className="size-3" />
-          {changed}
-        </span>
-      )}
-    </button>
+    </span>
   )
 }
 

@@ -1797,6 +1797,24 @@ rebase, reset, revert, amend and deleting a ref stay the shell's.
 - `Copy Commit Message` copies the whole message, body and trailers
   (`commitMessage`), since the log row carries the subject alone.
 
+### Switching branches from the system bar
+
+The branch name at the left of the system bar opens a list of the
+repository's branches — local, then remote — and picking one checks it out
+(`components/studio/branch-picker.tsx`, `switchBranch` in `main/git.ts`,
+`IPC.gitSwitchBranch`). It was a click that opened `Changes`, which is not what
+anybody clicking a branch name expects: every editor's status bar answers that
+click with this list. The figures beside the name (`↑`/`↓`, files changed) are
+a button of their own and still open `Changes`.
+
+It is the Git Graph menu's bargain again, not a second git client: it moves
+`HEAD` onto a branch that **already exists** (a remote one by way of a local
+branch tracking it, the one thing it makes), and `git switch` refuses where
+local edits would be lost — a refusal stays in the list as git's own sentence.
+The name must be one `for-each-ref` lists at that moment, so nothing typed
+reaches git as an argument. No stash, no "carry my changes over", no branch
+made from a typed name: those are the shell's, or the graph's `Create Branch…`.
+
 ### Who last changed a line
 
 The caret line's blame is drawn faintly after it, with a card on hover:

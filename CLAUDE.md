@@ -151,7 +151,9 @@ imports may reach `electron`.
   `checkoutDetached`, `createBranch`, `createTag`, `cherryPick`, each answering
   with git's words, and `compareBase` for its three comparisons
   (`files/graph-commit-menu.tsx`, `test/git-graph-menu.ts`; `docs/design.md`
-  § The Git Graph tab's menu). Amend, merge, rebase, reset and deleting a ref
+  § The Git Graph tab's menu). **`switchBranch`** is the system bar's branch
+  name, a picker of existing branches (`branch-picker.tsx`, § Switching
+  branches from the system bar). Amend, merge, rebase, reset and deleting a ref
   stay out — that is
   the git client the dock's shell already is. **`push`** is the `Commits`
   view's button, run in the background and **never prompting** (no tty,

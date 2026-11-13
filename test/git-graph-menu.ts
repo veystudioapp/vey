@@ -12,6 +12,7 @@ import {
   compareBase,
   createBranch,
   createTag,
+  switchBranch,
 } from "../src/main/git"
 import { check, finish, section } from "./harness"
 
@@ -187,6 +188,44 @@ try {
   check(
     "is the branch HEAD is on",
     (await git(dir, "rev-parse", "--abbrev-ref", "HEAD")) === "fresh"
+  )
+
+  section("switchBranch")
+  const head = () => git(dir, "rev-parse", "--abbrev-ref", "HEAD")
+  const toMain = await switchBranch(dir, "main")
+  check("a local branch", toMain.ok && (await head()) === "main", toMain)
+  const unknown = await switchBranch(dir, "nowhere")
+  check("a branch that does not exist is refused", !unknown.ok, unknown)
+  const option = await switchBranch(dir, "--detach")
+  check("an option is not a branch", !option.ok, option)
+  await writeFile(path.join(dir, "a.txt"), "edited\n")
+  const blocked = await switchBranch(dir, "topic")
+  check(
+    "refused over local edits it would lose",
+    !blocked.ok && (await head()) === "main",
+    blocked
+  )
+  await git(dir, "checkout", "--", "a.txt")
+
+  // A remote whose fetch refspec owns `refs/remotes/origin/*`, so `--track`
+  // knows what to track; the ref itself is written rather than fetched.
+  await git(dir, "remote", "add", "origin", dir)
+  await git(dir, "update-ref", "refs/remotes/origin/feature", first)
+  const tracked = await switchBranch(dir, "origin/feature")
+  check(
+    "a remote branch becomes a local one tracking it",
+    tracked.ok &&
+      (await head()) === "feature" &&
+      (await git(dir, "rev-parse", "--abbrev-ref", "feature@{upstream}")) ===
+        "origin/feature",
+    tracked
+  )
+  await switchBranch(dir, "main")
+  const back = await switchBranch(dir, "origin/feature")
+  check(
+    "and the second time, the local one it already made",
+    back.ok && (await head()) === "feature",
+    back
   )
 } finally {
   await rm(dir, { recursive: true, force: true })

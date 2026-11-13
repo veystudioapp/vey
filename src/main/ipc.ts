@@ -68,6 +68,7 @@ import {
   commitFiles,
   currentBranch,
   checkoutDetached,
+  switchBranch,
   cherryPick,
   commitMessage,
   compareBase,
@@ -1338,6 +1339,10 @@ export function createIpc(host: Host): {
 
   handle(IPC.gitCherryPick, async (_event, folderId: string, hash: string) =>
     cherryPick(await store.resolveFolderDir(folderId), String(hash))
+  )
+
+  handle(IPC.gitSwitchBranch, async (_event, folderId: string, name: string) =>
+    switchBranch(await store.resolveFolderDir(folderId), String(name))
   )
 
   /*

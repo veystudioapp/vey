@@ -80,6 +80,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke(IPC.gitCreateTag, folderId, name, hash, message),
   gitCherryPick: (folderId, hash) =>
     ipcRenderer.invoke(IPC.gitCherryPick, folderId, hash),
+  gitSwitchBranch: (folderId, name) =>
+    ipcRenderer.invoke(IPC.gitSwitchBranch, folderId, name),
   gitStage: (folderId, paths) =>
     ipcRenderer.invoke(IPC.gitStage, folderId, paths),
   gitUnstage: (folderId, paths) =>
