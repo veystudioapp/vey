@@ -11,6 +11,9 @@ export const settings = {
     updatesBlurb: "Version, updates and usage counts.",
     background: "Menu bar",
     backgroundBlurb: "Keeping Vey running for its bots.",
+    sounds: "Sounds",
+    soundsBlurb:
+      "A mechanical keyboard as you type and a click as you click, from Mechvibes sound packs.",
   },
   appearance: {
     language: "Language",
@@ -58,6 +61,44 @@ export const settings = {
     openAtLoginDescription:
       "Starts Vey in the menu bar, with no window, when you log in, so bots run after a restart.",
     openAtLoginUnavailable: "Only in the installed macOS app.",
+  },
+  sounds: {
+    enabled: "Typing sounds",
+    enabledDescription:
+      "Plays a keyboard as you type in Vey — chats, editors and the terminal. Keys typed in other apps stay quiet.",
+    pack: "Sound",
+    packDescription: "The keyboard you hear.",
+    packLoading: "Loading…",
+    noPacks: "No sound packs",
+    builtIn: "Built in",
+    imported: "Imported",
+    preview: "Play a preview",
+    volume: "Volume",
+    volumeDescription: "Of the typing sounds alone, under the system volume.",
+    mouseEnabled: "Click sounds",
+    mouseEnabledDescription:
+      "Plays a click as you press a mouse or trackpad button in Vey. Clicks in other apps stay quiet.",
+    mousePackDescription: "The mouse you hear.",
+    mouseVolumeDescription:
+      "Of the click sounds alone, under the system volume.",
+    release: "Release sound",
+    releaseDescription:
+      "A second sound as a key or button comes up, where the pack has one.",
+    pitch: "Vary the pitch",
+    pitchDescription:
+      "A slightly different pitch each press, so a repeated key or click is not a loop.",
+    tryIt: "Try it",
+    tryItPlaceholder: "Type here…",
+    importTitle: "Import a Mechvibes pack",
+    importDescription:
+      "A keyboard or mouse pack's folder or .zip — from the mechvibes.com library or the Mechvibes editor, V1 or V2.",
+    importFolder: "Folder…",
+    importZip: ".zip…",
+    importedPack: "Imported {name}.",
+    replacedPack: "Updated {name}.",
+    by: "by {author}",
+    kindKeyboard: "Keyboard",
+    kindMouse: "Mouse",
   },
   updates: {
     version: "Version",

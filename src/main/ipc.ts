@@ -23,6 +23,7 @@ import {
   type Bot,
 } from "../shared/api"
 import type { PluginFile, PluginSource } from "../shared/plugins"
+import type { SoundPackSource } from "../shared/sound-packs"
 import { pathFilterOf } from "../shared/search"
 import { agentCommands } from "./agent-commands"
 import { agentModels } from "./agent-models"
@@ -104,13 +105,28 @@ import {
   readPluginData,
   writePluginData,
 } from "./plugins"
+import {
+  installedSoundPackDir,
+  installSoundPack,
+  listSoundPacks,
+  readSoundPack,
+  readSoundPackFolder,
+  readSoundPackZip,
+  type SoundPackFiles,
+} from "./sound-packs"
 import { draftCommitMessage } from "./one-turn-agent"
 import type { Host } from "./host"
 import { expandHome, quote, spawnEnvironment } from "./shell-env"
 import { systemUsage } from "./system-usage"
 import { listeningPorts, stopListener } from "./ports"
 import { startTelemetry, type Telemetry } from "./telemetry"
-import { PLUGIN_DATA_DIR, PLUGINS_DIR, Store, WORKSPACE_DIR } from "./store"
+import {
+  PLUGIN_DATA_DIR,
+  PLUGINS_DIR,
+  SOUND_PACKS_DIR,
+  Store,
+  WORKSPACE_DIR,
+} from "./store"
 import { installedShells } from "./shells"
 import { TerminalManager } from "./terminal"
 import { TsServers } from "./tsserver"
@@ -2001,6 +2017,48 @@ export function createIpc(host: Host): {
   // left where it is, so installing it again picks up where it was.
   handle(IPC.removePlugin, async (_event, id: string) => {
     await host.trash(await installedPluginDir(pluginRoots, id))
+  })
+
+  /*
+   * The typing sounds' packs — `main/sound-packs.ts`. Importing is the
+   * plugins' bargain: a picker and a copy of the files the config names.
+   */
+  const soundPackRoots = {
+    bundled: host.bundledSoundPacksDir,
+    user: path.join(dataDir(), WORKSPACE_DIR, SOUND_PACKS_DIR),
+  }
+
+  handle(IPC.soundPacks, () => listSoundPacks(soundPackRoots))
+
+  handle(IPC.soundPack, (_event, id: string) =>
+    readSoundPack(soundPackRoots, id)
+  )
+
+  handle(IPC.installSoundPack, async (_event, source: SoundPackSource) => {
+    let files: SoundPackFiles
+    if (source === "folder") {
+      const dir = await host.pickDirectory({
+        title: "Import a Mechvibes sound pack from a folder",
+        buttonLabel: "Import",
+      })
+      if (!dir) return null
+      files = await readSoundPackFolder(dir)
+    } else if (source === "zip") {
+      const [zip] = await host.pickFiles({
+        title: "Import a Mechvibes sound pack from a .zip",
+        single: true,
+        filters: [{ name: "Sound pack archive", extensions: ["zip"] }],
+      })
+      if (!zip) return null
+      files = readSoundPackZip(await readFile(zip))
+    } else {
+      throw new Error(`Not a sound pack source: ${String(source)}`)
+    }
+    return installSoundPack(soundPackRoots, files)
+  })
+
+  handle(IPC.removeSoundPack, async (_event, id: string) => {
+    await host.trash(await installedSoundPackDir(soundPackRoots, id))
   })
 
   handle(IPC.systemUsage, () => systemUsage(host.appShare))

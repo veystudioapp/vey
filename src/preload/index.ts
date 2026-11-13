@@ -279,6 +279,12 @@ const api: DesktopApi = {
   installPlugin: (source) => ipcRenderer.invoke(IPC.installPlugin, source),
   removePlugin: (id) => ipcRenderer.invoke(IPC.removePlugin, id),
 
+  soundPacks: () => ipcRenderer.invoke(IPC.soundPacks),
+  soundPack: (id) => ipcRenderer.invoke(IPC.soundPack, id),
+  installSoundPack: (source) =>
+    ipcRenderer.invoke(IPC.installSoundPack, source),
+  removeSoundPack: (id) => ipcRenderer.invoke(IPC.removeSoundPack, id),
+
   bots: () => ipcRenderer.invoke(IPC.bots),
   saveBot: (input) => ipcRenderer.invoke(IPC.saveBot, input),
   deleteBot: (id) => ipcRenderer.invoke(IPC.deleteBot, id),

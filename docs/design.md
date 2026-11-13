@@ -1158,6 +1158,63 @@ stage) stay English inside Vietnamese sentences, the way Vietnamese developers
 say them. Not every surface is translated yet; an untranslated string is simply
 English.
 
+### Typing sounds
+
+Settings › **Sounds** plays a mechanical keyboard as you type in Vey and a
+click as you click. It is two cards, one per kind, Mechvibes' own split:
+keyboard and mouse each have a switch (off by default — a window that starts
+clicking after an update is a window somebody mutes), a pack and a volume, so
+either can be on alone and each at its own level. Below them are what the two
+share — the release sound and a pitch that varies a little per press — a field
+to try typing in, and importing more. They are `typingSound*` and
+`mouseSound*` in `workbench.settings`. The release and pitch keep their
+`typingSound` names because the keyboard had them first and a setting key
+already written is not renamed. Picking a pack plays it, a word for a keyboard
+and a few clicks for a mouse, so the list is its own preview, the way the font
+picker draws each family in itself.
+
+**The packs are Mechvibes'**, not a format of this app's own. Several open
+projects do this — Mechvibes, Thock, Tickeys, kbsim, bucklespring — and
+Mechvibes' `config.json` is the one the others read too, with a library of
+packs people have already made. Its V2 keys a pack by `KeyboardEvent.code`,
+which is what a keydown in this page carries, so the format fits a web app with
+no table in between. A mouse pack keys its sounds `MouseLeft`, `MouseRight`,
+`MouseMiddle`, `Mouse4` and `Mouse5`, and its kind is `soundpack_type`, or
+else every key being a button, Mechvibes' own test. A pack keeps its own
+kind's keys alone, so a keyboard pack's stray `MouseLeft` cannot click under
+the mouse pack chosen beside it. V1 packs, still passed around as zips, are read through
+iohook's scancodes with the table Mechvibes' own converter uses, or as
+buttons when the pack sets `mouse` (`shared/sound-packs.ts`,
+`test/sound-packs.ts`). Mechvibes' rules are kept
+where a pack could sound different in two apps: more than two segments on a key
+plays nothing, a key a pack leaves out is silent rather than given a stand-in,
+and a segment past the file's end is cut there.
+
+**The built-in packs are Mechvibes' own**, its ten keyboard packs and four mouse
+packs, copied unchanged into `resources/sound-packs/` with its MIT licence (an
+`extraResources` entry, about 17 MB, almost all of it the keyboards). bucklespring's Model M and KeyEcho's packs were the alternatives
+and are GPL and AGPL, which this MIT app cannot carry. kbsim's are small and
+MIT, but nothing says the recordings came with the code. **Importing** is the
+plugins' bargain (`main/sound-packs.ts`): a folder or a `.zip`, the config
+copied as it is, so the pack stays one Mechvibes reads, together with the audio
+files it names and nothing else, under `workspace/sound-packs/<id>/`. Every
+name in the config is held inside the pack (`packFileOf`). The same id again is
+an update, and a built-in id is refused.
+
+**This window's keys and clicks only.** `lib/typing-sounds/engine.ts` listens
+at `window` in the capture phase, so the composer, CodeMirror and xterm's
+textarea sound alike without any of them knowing. A key typed or a click made
+in another app is silent: hearing those means the OS's accessibility
+permission and a global hook, which is Mechvibes' job. Clicks are heard as
+`mousedown`/`mouseup`, not as pointer events: to Pointer Events, a second
+button pressed while the first is held is a `pointermove`, so a right click
+during a drag would make no sound. The keyboard and the mouse are two slots
+in the engine, each with its own decoded pack and its own gain node. A pack is decoded once into `AudioBuffer`s, and each key gets
+a new `AudioBufferSourceNode` started at its slice. An `<audio>` element per key
+was the alternative, and it adds a decode to every press. A pack whose
+recording has a release half plays it on keyup or mouseup, but only for a key
+or button whose press this window heard.
+
 ### Signing in, removed
 
 There was a Google sign-in until 2026-10-28, and it existed for one thing:

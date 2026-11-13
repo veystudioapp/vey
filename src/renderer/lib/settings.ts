@@ -123,6 +123,30 @@ type Stored = {
    * row first.
    */
   language: LanguageChoice
+  /**
+   * The typing sounds — a Mechvibes pack played on every key pressed in this
+   * window (`lib/typing-sounds/`, `docs/design.md` § Typing sounds). Off by
+   * default: a window that starts clicking after an update is a window
+   * somebody mutes.
+   */
+  typingSounds: boolean
+  /** The pack's id — a folder of `resources/sound-packs/` or an imported one.
+   * Null, or a pack since removed, plays `DEFAULT_SOUND_PACK`. */
+  typingSoundPack: string | null
+  /** 0–1, multiplied by the pack's own `recommended_volume`. */
+  typingSoundVolume: number
+  /** Whether a key or button coming up plays the pack's release, where it
+   * has one — for the keyboard and the mouse both. */
+  typingSoundRelease: boolean
+  /** A slightly different pitch each time, so a run of one key is not a
+   * machine — on whatever the pack itself says. Both kinds, like the release. */
+  typingSoundPitch: boolean
+  /** The click sounds, a Mechvibes mouse pack: the keyboard's three again,
+   * kept apart so either can be on alone and each at its own level. Off by
+   * default, for the same reason. */
+  mouseSounds: boolean
+  mouseSoundPack: string | null
+  mouseSoundVolume: number
 } & Appearance
 
 function isStored(value: unknown): value is Stored {
@@ -187,7 +211,29 @@ function isStored(value: unknown): value is Stored {
     (record.defaultAccountLabel === undefined ||
       record.defaultAccountLabel === null ||
       typeof record.defaultAccountLabel === "string") &&
-    (record.language === undefined || isLanguageChoice(record.language))
+    (record.language === undefined || isLanguageChoice(record.language)) &&
+    (record.typingSounds === undefined ||
+      typeof record.typingSounds === "boolean") &&
+    (record.typingSoundPack === undefined ||
+      record.typingSoundPack === null ||
+      typeof record.typingSoundPack === "string") &&
+    (record.typingSoundVolume === undefined ||
+      (typeof record.typingSoundVolume === "number" &&
+        record.typingSoundVolume >= 0 &&
+        record.typingSoundVolume <= 1)) &&
+    (record.typingSoundRelease === undefined ||
+      typeof record.typingSoundRelease === "boolean") &&
+    (record.typingSoundPitch === undefined ||
+      typeof record.typingSoundPitch === "boolean") &&
+    (record.mouseSounds === undefined ||
+      typeof record.mouseSounds === "boolean") &&
+    (record.mouseSoundPack === undefined ||
+      record.mouseSoundPack === null ||
+      typeof record.mouseSoundPack === "string") &&
+    (record.mouseSoundVolume === undefined ||
+      (typeof record.mouseSoundVolume === "number" &&
+        record.mouseSoundVolume >= 0 &&
+        record.mouseSoundVolume <= 1))
   )
 }
 
@@ -231,6 +277,16 @@ type SettingsState = Stored & {
   /** Applied to the UI by `applyLanguage` through a subscription, the way
    * the appearance is. */
   setLanguage: (language: LanguageChoice) => void
+  /** The typing sounds, played by `lib/typing-sounds/engine.ts` through a
+   * subscription. */
+  setTypingSounds: (on: boolean) => void
+  setTypingSoundPack: (id: string) => void
+  setTypingSoundVolume: (volume: number) => void
+  setTypingSoundRelease: (on: boolean) => void
+  setTypingSoundPitch: (on: boolean) => void
+  setMouseSounds: (on: boolean) => void
+  setMouseSoundPack: (id: string) => void
+  setMouseSoundVolume: (volume: number) => void
   /** Reads the stored preferences. Called once, at launch. */
   restore: () => Promise<void>
 }
@@ -280,6 +336,14 @@ export const useSettings = create<SettingsState>((set, get) => {
       accountsCollapsed,
       defaultAccountLabel,
       language,
+      typingSounds,
+      typingSoundPack,
+      typingSoundVolume,
+      typingSoundRelease,
+      typingSoundPitch,
+      mouseSounds,
+      mouseSoundPack,
+      mouseSoundVolume,
     } = get()
     remember(SETTINGS_KEY, {
       diffSideBySide,
@@ -305,6 +369,14 @@ export const useSettings = create<SettingsState>((set, get) => {
       accountsCollapsed,
       defaultAccountLabel,
       language,
+      typingSounds,
+      typingSoundPack,
+      typingSoundVolume,
+      typingSoundRelease,
+      typingSoundPitch,
+      mouseSounds,
+      mouseSoundPack,
+      mouseSoundVolume,
     })
   }
 
@@ -335,6 +407,14 @@ export const useSettings = create<SettingsState>((set, get) => {
     accountsCollapsed: false,
     defaultAccountLabel: null,
     language: "system",
+    typingSounds: false,
+    typingSoundPack: null,
+    typingSoundVolume: 0.5,
+    typingSoundRelease: true,
+    typingSoundPitch: false,
+    mouseSounds: false,
+    mouseSoundPack: null,
+    mouseSoundVolume: 0.5,
     telemetry: true,
     loaded: false,
 
@@ -450,6 +530,46 @@ export const useSettings = create<SettingsState>((set, get) => {
 
     setLanguage(language) {
       set({ language })
+      save()
+    },
+
+    setTypingSounds(typingSounds) {
+      set({ typingSounds })
+      save()
+    },
+
+    setTypingSoundPack(typingSoundPack) {
+      set({ typingSoundPack })
+      save()
+    },
+
+    setTypingSoundVolume(volume) {
+      set({ typingSoundVolume: Math.min(1, Math.max(0, volume)) })
+      save()
+    },
+
+    setTypingSoundRelease(typingSoundRelease) {
+      set({ typingSoundRelease })
+      save()
+    },
+
+    setTypingSoundPitch(typingSoundPitch) {
+      set({ typingSoundPitch })
+      save()
+    },
+
+    setMouseSounds(mouseSounds) {
+      set({ mouseSounds })
+      save()
+    },
+
+    setMouseSoundPack(mouseSoundPack) {
+      set({ mouseSoundPack })
+      save()
+    },
+
+    setMouseSoundVolume(volume) {
+      set({ mouseSoundVolume: Math.min(1, Math.max(0, volume)) })
       save()
     },
 
