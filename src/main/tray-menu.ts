@@ -74,15 +74,23 @@ export function trayTitleOf(bots: Bot[]): string {
   return on > 0 ? String(on) : ""
 }
 
-/** One bot's row: what it is doing now, or when it next runs. */
-function botLine(bot: Bot, now: Date): { label: string; at: number } {
-  if (isRunning(bot)) {
-    return { label: `${clip(bot.name, 36)} · running`, at: -1 }
-  }
+/** One bot's row: its project, what it is doing now or when it next runs.
+ * The project ahead of the name because two projects' bots are often called
+ * the same thing — a recap, a security pass — and the menu mixes them, sorted
+ * by time. A project that has left the workspace is no prefix. */
+function botLine(
+  bot: Bot,
+  project: string | undefined,
+  now: Date
+): { label: string; at: number } {
+  const name = project
+    ? `${clip(project, 24)}: ${clip(bot.name, 36)}`
+    : clip(bot.name, 36)
+  if (isRunning(bot)) return { label: `${name} · running`, at: -1 }
   const next = nextDue(bot.schedule, now)
   return next
-    ? { label: `${clip(bot.name, 36)} · ${whenOf(next, now)}`, at: +next }
-    : { label: `${clip(bot.name, 36)} · no days picked`, at: Infinity }
+    ? { label: `${name} · ${whenOf(next, now)}`, at: +next }
+    : { label: `${name} · no days picked`, at: Infinity }
 }
 
 /**
@@ -94,10 +102,13 @@ function botLine(bot: Bot, now: Date): { label: string; at: number } {
 export function trayMenuOf({
   attention,
   bots,
+  projects = {},
   now,
 }: {
   attention: AttentionChat[]
   bots: Bot[]
+  /** A project's name by its folder id. */
+  projects?: Record<string, string>
   now: Date
 }): TrayItem[] {
   const items: TrayItem[] = [{ kind: "open" }, { kind: "separator" }]
@@ -134,7 +145,7 @@ export function trayMenuOf({
   // heading would count a row nobody can see.
   const enabled = bots
     .filter((bot) => bot.enabled || isRunning(bot))
-    .map((bot) => botLine(bot, now))
+    .map((bot) => botLine(bot, projects[bot.projectId], now))
     .sort((a, b) => a.at - b.at)
   if (enabled.length === 0) {
     items.push({ kind: "note", label: "No bots switched on" })

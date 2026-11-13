@@ -121,8 +121,9 @@ export type Host = {
   setAttention: (chats: AttentionChat[]) => void
   /** Every bot, for the menu bar icon's menu — handed over on each change
    * rather than asked for, since the menu is built on a click and cannot
-   * wait on a read. */
-  setBots: (bots: Bot[]) => void
+   * wait on a read. With each project's name by its folder id, which a bot
+   * does not carry. */
+  setBots: (bots: Bot[], projects: Record<string, string>) => void
   /** Opening at login, hidden in the menu bar — the OS's own login item. Null
    * where it is not offered: anything but a packaged macOS build, where the
    * window is not hidden on close and a dev run would register Electron. */

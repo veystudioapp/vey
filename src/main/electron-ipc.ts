@@ -172,6 +172,7 @@ export function registerIpc(
   let tray: MenuBarTray | null = null
   let attention: AttentionChat[] = []
   let bots: Bot[] = []
+  let projects: Record<string, string> = {}
   if (IS_MAC) {
     void app.whenReady().then(() => {
       tray = new MenuBarTray({
@@ -180,7 +181,7 @@ export function registerIpc(
         quit: () => app.quit(),
       })
       tray.setAttention(attention)
-      tray.setBots(bots)
+      tray.setBots(bots, projects)
     })
   }
 
@@ -296,9 +297,10 @@ export function registerIpc(
       app.setBadgeCount(chats.length)
       tray?.setAttention(chats)
     },
-    setBots(next) {
+    setBots(next, names) {
       bots = next
-      tray?.setBots(next)
+      projects = names
+      tray?.setBots(next, names)
     },
     // `mainAppService`, the default: the app itself as the login item, which
     // is what `wasOpenedAtLogin` in `main.ts` is then asked about.

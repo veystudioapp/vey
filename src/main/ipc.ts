@@ -20,6 +20,7 @@ import {
   type ChatAnswer,
   type ChatOptions,
   type GitCompareAgainst,
+  type Bot,
 } from "../shared/api"
 import type { PluginFile, PluginSource } from "../shared/plugins"
 import { pathFilterOf } from "../shared/search"
@@ -364,6 +365,16 @@ export function createIpc(host: Host): {
 
   const notices = new ChatNotices()
 
+  /** The bots for the menu bar icon, with their projects' names: a bot
+   * carries its project's id alone, and the menu names the project. */
+  const showBots = async (records: Bot[]): Promise<void> => {
+    const { folders } = await store.getWorkspace()
+    host.setBots(
+      records,
+      Object.fromEntries(folders.map((folder) => [folder.id, folder.name]))
+    )
+  }
+
   /*
    * Bots — a saved prompt sent into a new chat of its project on a schedule
    * (`main/bots.ts`, `docs/design.md` § Bots). Every run is a chat made the
@@ -387,11 +398,14 @@ export function createIpc(host: Host): {
     reported: (chatId) => void announce({ kind: "done", chatId }),
     onChange: (records) => {
       send(IPC.botsChanged, records)
-      host.setBots(records)
+      void showBots(records).catch(() => {})
     },
   })
   bots.start()
-  void bots.list().then(host.setBots, () => {})
+  void bots
+    .list()
+    .then(showBots)
+    .catch(() => {})
 
   handle(IPC.bots, () => bots.list())
   handle(IPC.saveBot, (_event, input: unknown) => bots.save(input))
@@ -1179,9 +1193,15 @@ export function createIpc(host: Host): {
     return store.removeFolder(folderId)
   })
 
-  handle(IPC.renameFolder, (_event, id: string, name: string) =>
-    store.renameFolder(id, name)
-  )
+  handle(IPC.renameFolder, async (_event, id: string, name: string) => {
+    const workspace = await store.renameFolder(id, name)
+    // The menu bar's bot rows name their project.
+    void bots
+      .list()
+      .then(showBots)
+      .catch(() => {})
+    return workspace
+  })
 
   handle(IPC.removeFolder, (_event, id: string) => store.removeFolder(id))
 

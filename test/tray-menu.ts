@@ -138,6 +138,20 @@ section("the menu")
   )
 }
 
+{
+  const items = trayMenuOf({
+    attention: [],
+    bots: [bot("recap", "18:00"), { ...bot("gone", "19:00"), projectId: "p9" }],
+    projects: { p1: "Yasuo" },
+    now,
+  })
+  check(
+    "a bot's row names its project, and none once the project is gone",
+    labels(items, "bot").join(" | ") === "Yasuo: recap · 18:00 | gone · 19:00",
+    labels(items, "bot")
+  )
+}
+
 section("the running bots")
 {
   const running: BotRun = {

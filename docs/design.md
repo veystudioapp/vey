@@ -265,6 +265,10 @@ reaches the tray, so nothing polls. Its menu, built on each click so a
 bot's next run is worked out when somebody looks (`main/tray-menu.ts`,
 `test/tray-menu.ts`): `Open Vey`, `Needs you` (a question first), the bots
 switched on by their next run, `Quit Vey`. English, like the notifications.
+A bot's row is `Project: name · when` — the menu mixes every project's bots
+by time, and two projects' bots are often called the same thing. The names
+come with the bots through `host.setBots`, since a bot carries only its
+project's id, and a rename pushes them again.
 
 **`Open at login`** (Settings › Menu bar) is the OS's own login item
 (`setLoginItemSettings`), asked of the OS each time rather than kept as a

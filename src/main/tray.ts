@@ -49,6 +49,7 @@ export class MenuBarTray {
   private readonly tray: Tray
   private attention: AttentionChat[] = []
   private bots: Bot[] = []
+  private projects: Record<string, string> = {}
 
   constructor(
     private readonly actions: {
@@ -78,8 +79,9 @@ export class MenuBarTray {
    * settling are both writes (`Bots.update`), and so is switching one on or
    * off — so neither the number beside the icon nor the menu's running count
    * is a poll. */
-  setBots(bots: Bot[]): void {
+  setBots(bots: Bot[], projects: Record<string, string>): void {
     this.bots = bots
+    this.projects = projects
     // Tabular digits, so the icon does not shift as the number changes.
     this.tray.setTitle(trayTitleOf(bots), { fontType: "monospacedDigit" })
     this.tray.setToolTip(trayTooltipOf(this.attention, bots))
@@ -100,6 +102,7 @@ export class MenuBarTray {
     const items = trayMenuOf({
       attention: this.attention,
       bots: this.bots,
+      projects: this.projects,
       now: new Date(),
     })
     return Menu.buildFromTemplate(items.map((item) => this.itemOf(item)))
