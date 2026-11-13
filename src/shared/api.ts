@@ -9,6 +9,12 @@
 import type { EslintResult } from "./eslint"
 import type { PluginInfo, PluginInstall, PluginSource } from "./plugins"
 import type {
+  SoundPackAudio,
+  SoundPackInfo,
+  SoundPackInstall,
+  SoundPackSource,
+} from "./sound-packs"
+import type {
   BrowserActivity,
   BrowserCapture,
   BrowserCommand,
@@ -3221,6 +3227,24 @@ export type DesktopApi = {
   /** Moves an installed plugin to the trash. A built-in one is refused. */
   removePlugin: (id: string) => Promise<void>
 
+  /**
+   * The typing sounds' Mechvibes packs, built-in first, then the imported
+   * ones under `workspace/sound-packs/` — `main/sound-packs.ts`.
+   */
+  soundPacks: () => Promise<SoundPackInfo[]>
+  /** A pack, parsed, with the bytes of every file it plays. */
+  soundPack: (id: string) => Promise<SoundPackAudio>
+  /**
+   * Asks for a Mechvibes pack's folder or `.zip` and imports it — or replaces
+   * it, when that id is already there. Null when the picker was cancelled; a
+   * pack that cannot be read throws with the reason.
+   */
+  installSoundPack: (
+    source: SoundPackSource
+  ) => Promise<SoundPackInstall | null>
+  /** Moves an imported pack to the trash. A built-in one is refused. */
+  removeSoundPack: (id: string) => Promise<void>
+
   /** Every bot in the workspace, every project's — `main/bots.ts`. */
   bots: () => Promise<Bot[]>
   /** Adds a bot, or replaces the one with that id. Main narrows what it is
@@ -3524,6 +3548,10 @@ export const IPC = {
   writePluginData: "plugins:write-data",
   installPlugin: "plugins:install",
   removePlugin: "plugins:remove",
+  soundPacks: "sound-packs:list",
+  soundPack: "sound-packs:read",
+  installSoundPack: "sound-packs:install",
+  removeSoundPack: "sound-packs:remove",
   bots: "bots:list",
   saveBot: "bots:save",
   deleteBot: "bots:delete",

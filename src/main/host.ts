@@ -159,6 +159,9 @@ export type Host = {
   /** The built-in plugins this build carries, or null for none — see
    * `main/plugins.ts`. */
   bundledPluginsDir: string | null
+  /** The typing sounds' built-in Mechvibes packs, or null for none — see
+   * `main/sound-packs.ts`. */
+  bundledSoundPacksDir: string | null
 
   /** This app's own share of the machine, for `systemUsage`: every process
    * Chromium runs, added up. */

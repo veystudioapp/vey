@@ -119,6 +119,10 @@ export const PLUGINS_DIR = "plugins"
  * `main/plugins.ts` says why it is not beside the plugin. */
 export const PLUGIN_DATA_DIR = "plugin-data"
 
+/** The typing sounds' imported Mechvibes packs, one folder each —
+ * `main/sound-packs.ts`. */
+export const SOUND_PACKS_DIR = "sound-packs"
+
 /** Every project's bots and their recent runs — `main/bots.ts`. */
 export const BOTS_FILE = "bots.json"
 

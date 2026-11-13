@@ -4,6 +4,9 @@ export const settings: Messages["settings"] = {
   sectionsLabel: "Các mục cài đặt",
   options: "Tùy chọn",
   sections: {
+    sounds: "Âm thanh",
+    soundsBlurb:
+      "Tiếng bàn phím cơ khi gõ và tiếng click chuột, từ các sound pack của Mechvibes.",
     appearance: "Giao diện",
     appearanceBlurb: "Studio trông như thế nào.",
     tabs: "Tab & trình soạn thảo",
@@ -59,6 +62,44 @@ export const settings: Messages["settings"] = {
     openAtLoginDescription:
       "Khởi động Vey trên thanh menu, không mở cửa sổ, khi bạn đăng nhập — để bot vẫn chạy sau khi khởi động lại máy.",
     openAtLoginUnavailable: "Chỉ có trong bản macOS đã cài đặt.",
+  },
+  sounds: {
+    enabled: "Âm thanh gõ phím",
+    enabledDescription:
+      "Phát tiếng bàn phím khi gõ trong Vey — chat, trình soạn thảo và terminal. Gõ ở ứng dụng khác thì không có tiếng.",
+    pack: "Âm thanh",
+    packDescription: "Loại bàn phím bạn nghe thấy.",
+    packLoading: "Đang tải…",
+    noPacks: "Không có sound pack nào",
+    builtIn: "Có sẵn",
+    imported: "Đã nhập",
+    preview: "Nghe thử",
+    volume: "Âm lượng",
+    volumeDescription: "Riêng của âm thanh gõ phím, dưới âm lượng hệ thống.",
+    mouseEnabled: "Âm thanh click chuột",
+    mouseEnabledDescription:
+      "Phát tiếng click khi bấm chuột hoặc trackpad trong Vey. Click ở ứng dụng khác thì không có tiếng.",
+    mousePackDescription: "Loại chuột bạn nghe thấy.",
+    mouseVolumeDescription:
+      "Riêng của âm thanh click chuột, dưới âm lượng hệ thống.",
+    release: "Tiếng nhả",
+    releaseDescription:
+      "Thêm một tiếng khi nhả phím hoặc nút chuột, nếu pack có.",
+    pitch: "Đổi cao độ",
+    pitchDescription:
+      "Mỗi lần nhấn cao độ hơi khác một chút, để một phím gõ hay một cú click lặp lại không nghe như máy.",
+    tryIt: "Gõ thử",
+    tryItPlaceholder: "Gõ vào đây…",
+    importTitle: "Nhập pack Mechvibes",
+    importDescription:
+      "Thư mục hoặc file .zip của một pack bàn phím hay chuột — từ thư viện mechvibes.com hoặc trình soạn Mechvibes, V1 hay V2 đều được.",
+    importFolder: "Thư mục…",
+    importZip: ".zip…",
+    importedPack: "Đã nhập {name}.",
+    replacedPack: "Đã cập nhật {name}.",
+    by: "của {author}",
+    kindKeyboard: "Bàn phím",
+    kindMouse: "Chuột",
   },
   updates: {
     version: "Phiên bản",

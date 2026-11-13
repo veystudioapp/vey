@@ -180,6 +180,17 @@ imports may reach `electron`.
   random install id, with the version and OS and **nothing about what is
   worked on**. A dev build reports only to a localhost server; off without
   `serverUrl()`, off by `TELEMETRY_KEY`. `docs/design.md` § Usage counts.
+- **`sound-packs.ts`** — the **typing and click sounds**' Mechvibes packs,
+  keyboard or mouse (`SoundPackKind`): the fourteen built-in ones in
+  `resources/sound-packs/` (an `extraResources` entry, copied unchanged from
+  Mechvibes with its MIT licence) and the user's `workspace/sound-packs/<id>/`,
+  imported from a folder or `.zip` the plugins' way (`config.json` as it is,
+  plus the audio it names). `shared/sound-packs.ts` reads V2 (keyed by
+  `KeyboardEvent.code` / `MouseLeft`…) and V1 (iohook scancodes). The renderer
+  plays them through Web Audio, `lib/typing-sounds/engine.ts`, for this
+  window's keys and clicks only, a slot per kind, and Settings › Sounds is the
+  whole of the UI.
+  Free of `electron` (`test/sound-packs.ts`); `docs/design.md` § Typing sounds.
 - **`ports.ts`** — the system bar's `Ports` dialog, the built-in `ports`
   plugin (`plugins/ports/`, through `app.ports` and `app.addStatusBarItem`): the
   TCP ports being listened on (`lsof -F` on macOS/Linux, `netstat` +

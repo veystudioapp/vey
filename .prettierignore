@@ -26,3 +26,7 @@ vscode-notes/.bun-tmp/
 bun.lock
 pnpm-lock.yaml
 .pnpm-store/
+
+# Mechvibes' own sound packs, kept byte for byte as its repository has them so
+# an update from there is a copy rather than a diff of reformatted JSON.
+resources/sound-packs/

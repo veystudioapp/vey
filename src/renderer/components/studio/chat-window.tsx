@@ -6,6 +6,7 @@ import { applyLanguage, useT } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { useProjects } from "@/lib/projects"
 import { useSettings } from "@/lib/settings"
+import { startTypingSounds } from "@/lib/typing-sounds/engine"
 import { useStudio } from "@/lib/store"
 import { useClaudeProfiles } from "@/lib/chat/claude-profiles"
 import { useChats } from "@/lib/chat/store"
@@ -68,6 +69,9 @@ export function ChatWindow({ chatId }: { chatId: string }) {
     applyLanguage(useSettings.getState().language)
     return useSettings.subscribe((state) => applyLanguage(state.language))
   }, [])
+
+  // The typing sounds: this window's keys, the pack Settings names.
+  useEffect(() => startTypingSounds(), [])
 
   // `busy` is sent on a change only, and this window may open mid-turn.
   useEffect(() => {
