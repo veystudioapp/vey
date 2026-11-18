@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react"
 
+import type { DiffSide } from "@shared/api"
 import { rootIdOf, useGitStatus } from "@/lib/files/git-status"
 import { useSettings } from "@/lib/settings"
 
@@ -44,10 +45,14 @@ const CodeMirrorFileDiff = lazy(loadDiffEditor)
 
 export function FileDiff({
   path,
+  side = "head",
   initialText,
   ready,
 }: {
   path: string
+  /** Which pair is compared — `head` for a file tab, the row's side for a
+   * `Changes` file with both rows (`DiffSide`). */
+  side?: DiffSide
   initialText: string
   /** Whether `initialText` is the file — false while the pane is still reading
    * it. The committed side is not asked for until it is, which is what makes
@@ -62,9 +67,9 @@ export function FileDiff({
   // The read is dropped if the pane has already moved on — its `initialText`
   // would be the new file's, and that pair is one file's commit against
   // another's buffer. The read for the file now selected is already in flight.
-  const docRef = useRef({ path, initialText })
+  const docRef = useRef({ path, side, initialText })
   useEffect(() => {
-    docRef.current = { path, initialText }
+    docRef.current = { path, side, initialText }
   })
 
   /*
@@ -81,12 +86,14 @@ export function FileDiff({
     return rootId ? state.byRoot[rootId] : undefined
   })
 
-  useHeadDiff(ready ? path : null, status, (read) => {
+  useHeadDiff(ready ? path : null, side, status, (read) => {
     const doc = docRef.current
-    if (doc.path !== read.path) return
+    if (doc.path !== read.path || doc.side !== read.side) return
     setHead({
       path: read.path,
+      side: read.side,
       text: read.text,
+      after: read.after,
       patch: read.patch,
       initialText: doc.initialText,
     })
@@ -123,6 +130,9 @@ export function FileDiff({
         whitespace={whitespace}
         original={head.text}
         patch={head.patch}
+        // The staged side's right is the index, not the file: fixed, and out
+        // of the shared buffer the other sides draw through.
+        modified={head.side === "staged" ? (head.after ?? "") : undefined}
       />
     </Suspense>
   )
@@ -146,8 +156,12 @@ export function FileDiff({
  */
 type Head = {
   path: string
-  /** What `HEAD` has of it, null for a file `HEAD` does not have. */
+  side: DiffSide
+  /** The left-hand side — what `HEAD` has of it, or the index for the
+   * `unstaged` side — null for a file that does not have it. */
   text: string | null
+  /** The index's copy, the right-hand side of the `staged` side alone. */
+  after: string | null
   /** And git's own patch between the two, which is what the view's ranges are
    * read off — see `lib/files/git-diff.ts`. Null is a fallback rather than an
    * error: the view computes the difference itself when there is none. */
@@ -159,12 +173,15 @@ type Head = {
 
 function useHeadDiff(
   path: string | null,
+  side: DiffSide,
   /** Whatever changing means "ask git again" — see the caller. Only its identity
    * is read here. */
   generation: unknown,
   onRead: (read: {
     path: string
+    side: DiffSide
     text: string | null
+    after: string | null
     patch: string | null
   }) => void
 ) {
@@ -183,20 +200,33 @@ function useHeadDiff(
     let alive = true
 
     void window.desktop
-      .fileDiff(path)
+      .fileDiff(path, side)
       .then((read) => {
         if (alive)
-          onReadRef.current({ path, text: read.head, patch: read.patch })
+          onReadRef.current({
+            path,
+            side,
+            text: read.before,
+            after: read.after ?? null,
+            patch: read.patch,
+          })
       })
       .catch(() => {
         // A path outside the workspace's roots, or a git that could not be run.
         // Both mean there is nothing to compare against, which the empty left
         // side already says.
-        if (alive) onReadRef.current({ path, text: null, patch: null })
+        if (alive)
+          onReadRef.current({
+            path,
+            side,
+            text: null,
+            after: null,
+            patch: null,
+          })
       })
 
     return () => {
       alive = false
     }
-  }, [path, generation])
+  }, [path, side, generation])
 }

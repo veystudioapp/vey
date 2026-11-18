@@ -54,6 +54,13 @@ type ChangesState = {
   /** Which file the tab is showing the diff of, per root. */
   selectedPath: Record<string, string | null>
   /**
+   * And from which row, per root: the staged one, the unstaged one, or null
+   * for a selection no row made. It matters only for a file with both rows,
+   * whose diff is drawn on the side that row was counted on — see
+   * `diffSideOf`.
+   */
+  selectedStaged: Record<string, boolean | null>
+  /**
    * Or which file **of a commit**, per root — a row under a commit opened in
    * the `Commits` view. The same one tab, so reading a commit is as many clicks
    * as reading the working tree and no more tabs. Whichever of the two was
@@ -112,11 +119,12 @@ type ChangesState = {
   closeOthers: (rootId: string) => void
   closeAll: () => void
   reorder: (ids: string[]) => void
-  /** Which file's diff the tab draws. Null draws the tab's own empty state. */
-  selectPath: (rootId: string, path: string | null) => void
+  /** Which file's diff the tab draws. Null draws the tab's own empty state.
+   * `staged` is the row it was picked from, when a row picked it. */
+  selectPath: (rootId: string, path: string | null, staged?: boolean) => void
   /** Both at once: the file to show, and the tab to show it in. What a row in
    * the Explorer's `Changes` list does. */
-  openPath: (rootId: string, path: string) => void
+  openPath: (rootId: string, path: string, staged?: boolean) => void
   /** A commit's file, in the root's diff tab. */
   openCommitFile: (rootId: string, target: CommitFileTarget) => void
 }
@@ -140,6 +148,7 @@ export const useChanges = create<ChangesState>((set, get) => ({
   openIds: [],
   selectedId: null,
   selectedPath: {},
+  selectedStaged: {},
   commitFile: {},
 
   async refresh(root) {
@@ -257,9 +266,10 @@ export const useChanges = create<ChangesState>((set, get) => ({
     set({ openIds: ids.filter((id) => open.has(id)) })
   },
 
-  selectPath(rootId, path) {
+  selectPath(rootId, path, staged) {
     set((state) => ({
       selectedPath: { ...state.selectedPath, [rootId]: path },
+      selectedStaged: { ...state.selectedStaged, [rootId]: staged ?? null },
       commitFile:
         path === null
           ? state.commitFile
@@ -267,11 +277,11 @@ export const useChanges = create<ChangesState>((set, get) => ({
     }))
   },
 
-  openPath(rootId, path) {
+  openPath(rootId, path, staged) {
     // The path first: `open` puts the pane on screen, and a pane that drew its
     // "nothing selected" notice for a frame before the diff arrived would
     // flicker on every row clicked.
-    get().selectPath(rootId, path)
+    get().selectPath(rootId, path, staged)
     get().open(rootId)
   },
 

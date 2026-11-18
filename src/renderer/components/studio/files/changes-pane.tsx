@@ -9,6 +9,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { useChanges } from "@/lib/files/changes"
+import { diffSideOf } from "@/lib/files/diff-side"
 import { fileRootsOf } from "@/lib/files/roots"
 import { isImage } from "@/lib/files/viewers"
 import { useT } from "@/lib/i18n"
@@ -63,6 +64,16 @@ export function ChangesPane() {
     rootId ? state.byRoot[rootId] : undefined
   )
   const count = changes?.length
+  // The pair the row clicked was counted on — see `diffSideOf`.
+  const side = useChanges((state) =>
+    rootId && path
+      ? diffSideOf(
+          state.byRoot[rootId],
+          path,
+          state.selectedStaged[rootId] ?? null
+        )
+      : "head"
+  )
   const all = useSettings((state) => state.changesStacked)
   /*
    * A file git stopped on opens in the editor rather than as a diff. A diff
@@ -141,6 +152,7 @@ export function ChangesPane() {
       // included: its text diff is a right-click away, and a changed
       // `viewBox` is read faster as a drawing than as a number.
       preferred={conflicted ? "text" : isImage(path) ? "image" : "diff"}
+      side={side}
     />
   ) : (
     <Notice

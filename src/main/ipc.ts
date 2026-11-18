@@ -11,6 +11,7 @@ import {
   type ClaudeApiProfileInput,
   type ClaudeLoginRequest,
   type ClaudeProfile,
+  type DiffSide,
   type FileDiff,
   type FileIndexEntry,
   type ReplaceResult,
@@ -78,6 +79,7 @@ import {
   discardAll,
   blame,
   fileAtHead,
+  fileAtIndex,
   fileBytesAtHead,
   fileDiff,
   lineHistory,
@@ -1481,23 +1483,35 @@ export function createIpc(host: Host): {
    * anything, so serialising them would be a second round trip's wait for the
    * same paint.
    */
-  handle(IPC.fileDiff, async (_event, filePath: string): Promise<FileDiff> => {
-    const target = await inWorkspace(filePath)
-    const roots = await fileRoots()
+  handle(
+    IPC.fileDiff,
+    async (
+      _event,
+      filePath: string,
+      side: DiffSide = "head"
+    ): Promise<FileDiff> => {
+      const target = await inWorkspace(filePath)
+      const roots = await fileRoots()
 
-    // The narrowest root that holds it, since one folder can be added inside
-    // another — the same rule `rootOf` follows in the renderer.
-    const root = roots
-      .filter((candidate) => files.insideAny([candidate.path], target))
-      .sort((a, b) => b.path.length - a.path.length)[0]
-    if (!root) return { head: null, patch: null }
+      // The narrowest root that holds it, since one folder can be added inside
+      // another — the same rule `rootOf` follows in the renderer.
+      const root = roots
+        .filter((candidate) => files.insideAny([candidate.path], target))
+        .sort((a, b) => b.path.length - a.path.length)[0]
+      if (!root) return { before: null, patch: null }
 
-    const [head, patch] = await Promise.all([
-      fileAtHead(root.path, target),
-      fileDiff(root.path, target),
-    ])
-    return { head, patch }
-  })
+      // The pair `DiffSide` names: the index is the left of `unstaged` and the
+      // right of `staged`, where the file on disk is not in the comparison.
+      const [before, after, patch] = await Promise.all([
+        side === "unstaged"
+          ? fileAtIndex(root.path, target)
+          : fileAtHead(root.path, target),
+        side === "staged" ? fileAtIndex(root.path, target) : undefined,
+        fileDiff(root.path, target, side),
+      ])
+      return after === undefined ? { before, patch } : { before, after, patch }
+    }
+  )
 
   handle(IPC.imageAtHead, async (_event, filePath: string) => {
     const target = await inWorkspace(filePath)

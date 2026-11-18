@@ -4,6 +4,7 @@ import path from "node:path"
 import { promisify } from "node:util"
 
 import type {
+  DiffSide,
   GitBlame,
   GitBlameCommit,
   GitChange,
@@ -435,6 +436,26 @@ export async function fileAtHead(
 }
 
 /**
+ * A file as the index has it, or null when the index does not have it — the
+ * left-hand side of an `unstaged` diff and the right of a `staged` one (see
+ * `DiffSide`). `:path` is stage 0, which is the only stage a file that is not
+ * mid-conflict has.
+ */
+export async function fileAtIndex(
+  dir: string,
+  filePath: string
+): Promise<string | null> {
+  const relative = await inRepository(dir, filePath)
+  if (relative === null) return null
+
+  try {
+    return await git(dir, ["show", `:${relative}`])
+  } catch {
+    return null
+  }
+}
+
+/**
  * `fileAtHead` for a picture: the committed bytes, or null when HEAD has none.
  *
  * Its own read because `git` decodes stdout as UTF-8, and a PNG through that is
@@ -476,11 +497,14 @@ export async function fileBytesAtHead(
  * hunk header *is* the changed range, and the renderer turns each straight into
  * a pair of ranges rather than counting context back off it.
  *
- * **`HEAD` is named, unlike in `numstat`.** The left-hand side on screen is the
- * commit, so the patch has to span the index and the working tree at once or it
- * would describe a different pair than the one being drawn. A repository with
- * no commits has no `HEAD` to name and fails into null here — the same nothing
- * an untracked file gets, and the same thing both mean to a diff.
+ * **The pair is the `side`'s** (`DiffSide`), and for `staged` and `unstaged`
+ * it is the same pair `numstat` counted that row on — `--cached` and the plain
+ * form — so a `MM` file's two rows each draw the diff their `+`/`-` describe.
+ * `head` names `HEAD`, unlike `numstat`: there the left-hand side on screen is
+ * the commit and the right the file, so the patch has to span the index and the
+ * working tree at once. A repository with no commits has no `HEAD` to name and
+ * fails into null there — the same nothing an untracked file gets, and the same
+ * thing both mean to a diff.
  *
  * `--no-textconv` because the renderer checks this patch against the two texts
  * it holds and drops it whole if it does not describe them: a patch of what
@@ -488,7 +512,8 @@ export async function fileBytesAtHead(
  */
 export async function fileDiff(
   dir: string,
-  filePath: string
+  filePath: string,
+  side: DiffSide = "head"
 ): Promise<string | null> {
   const relative = await inRepository(dir, filePath)
   if (relative === null) return null
@@ -499,7 +524,7 @@ export async function fileDiff(
       // that writes the index would report a change to itself.
       "--no-optional-locks",
       "diff",
-      "HEAD",
+      ...(side === "head" ? ["HEAD"] : side === "staged" ? ["--cached"] : []),
       "--unified=0",
       "--no-color",
       "--no-ext-diff",

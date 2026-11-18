@@ -34,6 +34,7 @@ import { IconButton } from "../icon-button"
 import { FileDiff } from "./file-diff"
 import { FileEditor } from "./file-editor"
 import { encodableTypeOf } from "@shared/image-files"
+import type { DiffSide } from "@shared/api"
 import { FileImage } from "./file-image"
 import { FileImageEditor } from "./file-image-editor"
 import { FileImageDiff } from "./file-image-diff"
@@ -159,10 +160,14 @@ export function FilePane({
   path,
   visible,
   preferred,
+  side = "head",
 }: {
   path: string
   visible: boolean
   preferred?: Viewer
+  /** Which pair the diff compares — the `Changes` tab's row says, see
+   * `DiffSide`. A file tab is always `head`. */
+  side?: DiffSide
 }) {
   const t = useT()
   const doc = useFiles((state) => state.docs[path])
@@ -383,6 +388,7 @@ export function FilePane({
             path={path}
             doc={doc}
             viewer={viewer}
+            side={side}
             visible={visible}
             onChange={write}
             onSave={commit}
@@ -400,6 +406,7 @@ function Body({
   path,
   doc,
   viewer,
+  side,
   visible,
   onChange,
   onSave,
@@ -407,6 +414,7 @@ function Body({
   path: string
   doc: FileDoc | undefined
   viewer: Viewer
+  side: DiffSide
   /** Whether this pane is the one on screen — the note editor needs it, since
    * the stacked editors share the drawing event and only the visible one may
    * answer it. */
@@ -456,6 +464,7 @@ function Body({
         // keeps the diff on screen while the next file is read, and a key would
         // unmount the thing it is holding.
         path={path}
+        side={side}
         initialText={doc?.kind === "text" ? doc.text : ""}
         // A deleted file reads as an error and is ready: its right-hand side is
         // empty and its left is what was committed, which is what its diff is.

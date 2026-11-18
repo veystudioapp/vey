@@ -346,10 +346,22 @@ const DEFAULT_DIFF_CONFIG: DiffConfig = { scanLimit: 500 }
  */
 function gitDiffConfig(
   patch: string | null,
-  committed: string,
-  working: string
+  rawCommitted: string,
+  rawWorking: string
 ): DiffConfig {
   if (patch === null) return DEFAULT_DIFF_CONFIG
+
+  /*
+   * In the editor's terms, not git's. A document splits on `\r\n` and keeps
+   * `\n`, so the strings the override is called with are the texts with their
+   * CRLFs folded — and a file committed with CRLF, compared raw, failed every
+   * gap check and fell back to the package's own diff, whose bands are not
+   * git's `+`/`-`. Folding `\r\n` keeps every line where git counted it, so
+   * the patch's line numbers still hold; a lone `\r`, which the editor reads as
+   * a line break and git does not, moves them and is refused by the check.
+   */
+  const committed = rawCommitted.replace(/\r\n/g, "\n")
+  const working = rawWorking.replace(/\r\n/g, "\n")
 
   const ranges = gitDiffRanges(patch, committed, working)
   if (ranges === null) return DEFAULT_DIFF_CONFIG

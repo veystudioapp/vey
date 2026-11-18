@@ -1580,6 +1580,17 @@ so one path can be two rows with each side's own counts. Counts are
 `git diff --numstat`; untracked files are read under a cap. A row opens the
 project's **one diff tab**; a new directory opens in `All files` instead.
 
+**The diff is drawn on the row's side** (`DiffSide`, `lib/files/diff-side.ts`,
+`test/git-diff.ts`). A file staged and edited again is a `Staged` row counted
+`HEAD` → index and a `Changes` row counted index → working tree, and the pane
+used to draw `HEAD` → working tree under both — a diff matching neither row's
+`+`/`-`, with both rows marked. Now the row clicked is the pair drawn, and the
+one marked: the staged side's right is the index's copy (fixed, not the
+buffer), the unstaged side's left is the index. Every other file stays on
+`HEAD` → working tree, which is the same pair as its one row and keeps the
+right-hand side the file's own buffer. The stacked view still draws `HEAD`, so
+its header for such a file is the two rows' counts summed — an estimate.
+
 ### Staging, discarding, and where this stops
 
 Stage, unstage and discard are on the row, on a pile's heading and on the

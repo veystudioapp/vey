@@ -25,6 +25,7 @@ import {
   type ChangeTreeNode,
 } from "@/lib/files/change-tree"
 import { splitChanges, useChanges } from "@/lib/files/changes"
+import { isShownRow } from "@/lib/files/diff-side"
 import { GIT_LABELS, GIT_LETTERS, GIT_TONES } from "@/lib/files/git-status"
 import { nameOf } from "@/lib/files/paths"
 import type { FileRoot } from "@/lib/files/roots"
@@ -582,11 +583,17 @@ function ChangeRow({
   onMenu: (target: RowTarget) => void
   onDiscard: (target: RowTarget) => void
 }) {
-  // Both rows of a file that is staged and edited again are marked: the diff on
-  // screen is that file, and marking one of the two would be picking a side the
-  // pane is not taking.
-  const active = useChanges(
-    (state) => state.selectedPath[root.id] === change.path
+  // A file staged and edited again is two rows, each drawn as its own side's
+  // diff, so only the one clicked is marked — both, when no row picked a side.
+  const active = useChanges((state) =>
+    isShownRow(
+      state.byRoot[root.id],
+      {
+        path: state.selectedPath[root.id] ?? null,
+        staged: state.selectedStaged[root.id] ?? null,
+      },
+      change
+    )
   )
   const t = useT()
 
@@ -643,7 +650,7 @@ function ChangeRow({
 
           // And the tab it opens is the checkout's one diff tab, not a tab of
           // this file's own.
-          useChanges.getState().openPath(root.id, change.path)
+          useChanges.getState().openPath(root.id, change.path, change.staged)
           // And nothing else: the pane draws a file as a diff by asking for it
           // (`preferred` on `FilePane`), not by this writing `views` on the way
           // past. That write was a frame behind the path — the pane rendered the

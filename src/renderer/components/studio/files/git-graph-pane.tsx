@@ -47,6 +47,7 @@ import {
   shortRef,
 } from "@/lib/files/branch-pick"
 import { changeCount, splitChanges, useChanges } from "@/lib/files/changes"
+import { isShownRow } from "@/lib/files/diff-side"
 import { commitGraph, graphWidth } from "@/lib/files/commit-graph"
 import { ALL_BRANCHES, useGitGraph } from "@/lib/files/git-graph"
 import {
@@ -1036,9 +1037,13 @@ function UncommittedPanel({
 }) {
   const t = useT()
   const changes = useChanges((state) => state.byRoot[root.id])
-  const openPath = useChanges((state) =>
+  const selectedPath = useChanges((state) =>
     state.commitFile[root.id] ? null : (state.selectedPath[root.id] ?? null)
   )
+  const selectedStaged = useChanges(
+    (state) => state.selectedStaged[root.id] ?? null
+  )
+  const selected = { path: selectedPath, staged: selectedStaged }
   const { staged, unstaged } = splitChanges(changes ?? [])
 
   return (
@@ -1083,7 +1088,7 @@ function UncommittedPanel({
                   <WorkingFileRow
                     root={root}
                     change={change}
-                    active={!change.staged && openPath === change.path}
+                    active={isShownRow(changes, selected, change)}
                   />
                 </li>
               ))}
@@ -1126,7 +1131,7 @@ function WorkingFileRow({
             })
           return
         }
-        useChanges.getState().openPath(root.id, change.path)
+        useChanges.getState().openPath(root.id, change.path, change.staged)
       }}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden text-left">

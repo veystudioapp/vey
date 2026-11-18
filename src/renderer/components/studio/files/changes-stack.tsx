@@ -529,7 +529,7 @@ async function readBoth(path: string, state: Row["state"]): Promise<Read> {
   }
   return {
     kind: "diff",
-    head: diff?.head ?? null,
+    head: diff?.before ?? null,
     working:
       working && working.kind === "text"
         ? working.text.replace(/\r\n?/g, "\n")

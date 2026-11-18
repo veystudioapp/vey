@@ -352,22 +352,43 @@ export type GitChange = {
  * The two travel together because the pane cannot draw either alone and mounts
  * nothing until both are in hand — two calls would be two waits for one paint.
  *
- * `head` is the file as `HEAD` has it, null when `HEAD` does not have it: a
+ * `before` is the diff's left-hand side — the file as `HEAD` has it, or as the
+ * index has it for the `unstaged` side — and null when that does not have it: a
  * file somebody has just written, a directory that is not a repository, or a
  * repository with no commits, all of which are the same nothing to a diff.
  *
- * `patch` is `git diff HEAD --unified=0` for that path, and it is git's own
- * answer to what changed rather than a second opinion computed in the renderer.
- * Null when git could not be asked. **It is a hint, not a promise**: the
- * renderer checks it against the two texts it is actually drawing and falls
- * back to computing the difference itself if it does not describe them — which
- * is what happens for a buffer with unsaved edits, since git reads the file on
- * disk. See `lib/files/git-diff.ts`.
+ * `after` is the right-hand side **only for the `staged` side**, where it is the
+ * index's copy rather than the file on disk; the other two sides draw the file
+ * itself, which the renderer already holds.
+ *
+ * `patch` is git's own patch, `--unified=0`, between exactly that pair — see
+ * `DiffSide` — rather than a second opinion computed in the renderer. Null when
+ * git could not be asked. **It is a hint, not a promise**: the renderer checks
+ * it against the two texts it is actually drawing and falls back to computing
+ * the difference itself if it does not describe them — which is what happens
+ * for a buffer with unsaved edits, since git reads the file on disk. See
+ * `lib/files/git-diff.ts`.
  */
 export type FileDiff = {
-  head: string | null
+  before: string | null
+  after?: string | null
   patch: string | null
 }
+
+/**
+ * Which pair a working-tree diff compares, and so which `--numstat` its row in
+ * the `Changes` list was counted with.
+ *
+ * `head` is `HEAD` against the working tree — a file tab's diff, the stacked
+ * view, and any file with only one side changed, where it is the same pair as
+ * that side's. A file staged **and** edited again is two rows, each counted on
+ * its own side (`changes` in `main/git.ts`), so its diff has to be drawn on that
+ * side too: `staged` is `HEAD` against the index (`git diff --cached`),
+ * `unstaged` the index against the working tree (`git diff`). Drawing `HEAD`
+ * against the working tree under either row was a diff that matched neither
+ * row's `+`/`-`.
+ */
+export type DiffSide = "head" | "staged" | "unstaged"
 
 /**
  * A directory the Explorer is watching whose contents changed.
@@ -2469,12 +2490,13 @@ export type DesktopApi = {
   cancelCommitDraft: (folderId: string) => Promise<void>
 
   /**
-   * The committed side of a diff and git's own patch for it — see `FileDiff`.
+   * The other side of a diff and git's own patch for it — see `FileDiff`, and
+   * `DiffSide` for `side`, which is `head` when left off.
    *
    * Takes the path rather than a root and a relative path, like every other read
    * of a file in the workspace, and is gated the same way.
    */
-  fileDiff: (filePath: string) => Promise<FileDiff>
+  fileDiff: (filePath: string, side?: DiffSide) => Promise<FileDiff>
   /**
    * A picture as it was committed, as a `data:` URL — the left-hand side of the
    * `Changes` tab's image comparison. Null for one that is not in HEAD, which is
