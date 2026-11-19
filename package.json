@@ -109,6 +109,14 @@
       {
         "from": "dist-plugins",
         "to": "plugins"
+      },
+      {
+        "from": "resources/sound-packs",
+        "to": "sound-packs",
+        "filter": [
+          "**/*",
+          "!README.md"
+        ]
       }
     ],
     "directories": {

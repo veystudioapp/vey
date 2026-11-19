@@ -10,17 +10,22 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import {
   ArrowUpCircle,
   Columns2,
   ExternalLink,
+  Keyboard,
   PanelTop,
+  Play,
   Palette,
   RefreshCw,
   type LucideIcon,
@@ -49,7 +54,11 @@ import {
   useT,
   type MessageKey,
 } from "@/lib/i18n"
+import { resolveSoundPack } from "@/lib/typing-sounds/choice"
+import { previewSounds } from "@/lib/typing-sounds/engine"
+import { useSoundPacks } from "@/lib/typing-sounds/store"
 import { installLabel, pendingUpdate, useUpdates } from "@/lib/updates"
+import type { SoundPackKind, SoundPackSource } from "@shared/sound-packs"
 import { UpdateProgressBar } from "./update-progress"
 
 /**
@@ -135,6 +144,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <TabsSection />
             ) : section === "background" ? (
               <BackgroundSection />
+            ) : section === "sounds" ? (
+              <SoundsSection />
             ) : (
               <UpdatesSection />
             )}
@@ -145,7 +156,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
-type SectionId = "appearance" | "tabs" | "background" | "updates"
+type SectionId = "appearance" | "tabs" | "sounds" | "background" | "updates"
 
 /** The sections, in the order they are listed. Each one is a heading, a line
  * saying what it covers, and the rows below — kept together so adding a
@@ -167,6 +178,12 @@ const SECTIONS: {
     label: "settings.sections.tabs",
     blurb: "settings.sections.tabsBlurb",
     icon: Columns2,
+  },
+  {
+    id: "sounds",
+    label: "settings.sections.sounds",
+    blurb: "settings.sections.soundsBlurb",
+    icon: Keyboard,
   },
   {
     id: "background",
@@ -523,6 +540,325 @@ function BackgroundSection() {
             void window.desktop.setOpenAtLogin(on).then(setAtLogin)
           }
         />
+      </Row>
+    </Card>
+  )
+}
+
+/**
+ * The typing and click sounds (`lib/typing-sounds/`, `docs/design.md`
+ * § Typing sounds): a card for the keyboard and one for the mouse — each on or
+ * off, its Mechvibes pack and its volume — then what both share, and
+ * importing more. Picking a pack plays it, so the list is its own preview — the
+ * way the font picker draws each family in itself.
+ */
+function SoundsSection() {
+  const t = useT()
+  const typing = useSettings((state) => state.typingSounds)
+  const release = useSettings((state) => state.typingSoundRelease)
+  const setRelease = useSettings((state) => state.setTypingSoundRelease)
+  const pitch = useSettings((state) => state.typingSoundPitch)
+  const setPitch = useSettings((state) => state.setTypingSoundPitch)
+  const setTypingPack = useSettings((state) => state.setTypingSoundPack)
+  const setMousePack = useSettings((state) => state.setMouseSoundPack)
+  const packs = useSoundPacks((state) => state.packs)
+  const install = useSoundPacks((state) => state.install)
+  const remove = useSoundPacks((state) => state.remove)
+  const [importNote, setImportNote] = useState<{
+    text: string
+    error: boolean
+  } | null>(null)
+
+  useEffect(() => {
+    void useSoundPacks.getState().refresh()
+  }, [])
+
+  const imported = packs?.filter((pack) => !pack.builtin) ?? []
+
+  const importFrom = (source: SoundPackSource) => {
+    setImportNote(null)
+    install(source)
+      .then((installed) => {
+        if (!installed) return
+        setImportNote({
+          text: t(
+            installed.replaced
+              ? "settings.sounds.replacedPack"
+              : "settings.sounds.importedPack",
+            { name: installed.name }
+          ),
+          error: false,
+        })
+        // `install` has listed the packs again, so the new one's kind is
+        // known — and it is picked in its own card, not the other's.
+        const kind = useSoundPacks
+          .getState()
+          .packs?.find((pack) => pack.id === installed.id)?.kind
+        if (!kind) return
+        if (kind === "mouse") setMousePack(installed.id)
+        else setTypingPack(installed.id)
+        void previewSounds(kind, installed.id)
+      })
+      .catch((error: unknown) =>
+        setImportNote({ text: messageOfError(error), error: true })
+      )
+  }
+
+  return (
+    <div className="space-y-4">
+      <SoundKindCard kind="keyboard" />
+      <SoundKindCard kind="mouse" />
+
+      <Card>
+        <Row
+          title={t("settings.sounds.release")}
+          description={t("settings.sounds.releaseDescription")}
+        >
+          <Switch checked={release} onCheckedChange={setRelease} />
+        </Row>
+        <Row
+          title={t("settings.sounds.pitch")}
+          description={t("settings.sounds.pitchDescription")}
+        >
+          <Switch checked={pitch} onCheckedChange={setPitch} />
+        </Row>
+        <Row title={t("settings.sounds.tryIt")} description="">
+          <Input
+            disabled={!typing}
+            placeholder={t("settings.sounds.tryItPlaceholder")}
+            className="h-8 w-56 text-xs"
+          />
+        </Row>
+      </Card>
+
+      <Card>
+        <Row
+          title={t("settings.sounds.importTitle")}
+          description={
+            importNote ? (
+              <span className={cn(importNote.error && "text-destructive")}>
+                {importNote.text}
+              </span>
+            ) : (
+              t("settings.sounds.importDescription")
+            )
+          }
+        >
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => importFrom("folder")}
+            >
+              {t("settings.sounds.importFolder")}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => importFrom("zip")}
+            >
+              {t("settings.sounds.importZip")}
+            </Button>
+          </div>
+        </Row>
+        {imported.map((pack) => (
+          <Row
+            key={pack.id}
+            title={pack.name}
+            description={[
+              t(
+                pack.kind === "mouse"
+                  ? "settings.sounds.kindMouse"
+                  : "settings.sounds.kindKeyboard"
+              ),
+              pack.author
+                ? t("settings.sounds.by", { author: pack.author })
+                : pack.id,
+            ].join(" · ")}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setImportNote(null)
+                remove(pack.id).catch((error: unknown) =>
+                  setImportNote({ text: messageOfError(error), error: true })
+                )
+              }}
+            >
+              {t("common.remove")}
+            </Button>
+          </Row>
+        ))}
+      </Card>
+    </div>
+  )
+}
+
+/** One kind's three rows — on, which pack, how loud — over its own settings. */
+function SoundKindCard({ kind }: { kind: SoundPackKind }) {
+  const t = useT()
+  const keyboard = kind === "keyboard"
+  const enabled = useSettings((state) =>
+    keyboard ? state.typingSounds : state.mouseSounds
+  )
+  const setEnabled = useSettings((state) =>
+    keyboard ? state.setTypingSounds : state.setMouseSounds
+  )
+  const chosen = useSettings((state) =>
+    keyboard ? state.typingSoundPack : state.mouseSoundPack
+  )
+  const setChosen = useSettings((state) =>
+    keyboard ? state.setTypingSoundPack : state.setMouseSoundPack
+  )
+  const volume = useSettings((state) =>
+    keyboard ? state.typingSoundVolume : state.mouseSoundVolume
+  )
+  const setVolume = useSettings((state) =>
+    keyboard ? state.setTypingSoundVolume : state.setMouseSoundVolume
+  )
+  const packs = useSoundPacks((state) => state.packs)
+  // The slider's own value while it is dragged: the setting is written once,
+  // on letting go, rather than as a settings file per pixel.
+  const [dragged, setDragged] = useState<number | null>(null)
+
+  const ofKind = packs?.filter((pack) => pack.kind === kind) ?? null
+  const current = packs ? resolveSoundPack(chosen, packs, kind) : null
+  const builtIn = ofKind?.filter((pack) => pack.builtin) ?? []
+  const imported = ofKind?.filter((pack) => !pack.builtin) ?? []
+  const labels = Object.fromEntries(
+    (ofKind ?? []).map((pack) => [pack.id, pack.name])
+  )
+  const preview = (id: string | null) => {
+    if (id) void previewSounds(kind, id)
+  }
+
+  const commitVolume = () => {
+    if (dragged === null) return
+    setVolume(dragged)
+    setDragged(null)
+    preview(current)
+  }
+
+  return (
+    <Card>
+      <Row
+        title={t(
+          keyboard ? "settings.sounds.enabled" : "settings.sounds.mouseEnabled"
+        )}
+        description={t(
+          keyboard
+            ? "settings.sounds.enabledDescription"
+            : "settings.sounds.mouseEnabledDescription"
+        )}
+      >
+        <Switch
+          checked={enabled}
+          onCheckedChange={(on) => {
+            setEnabled(on)
+            if (on) preview(current)
+          }}
+        />
+      </Row>
+      <Row
+        title={t("settings.sounds.pack")}
+        description={t(
+          keyboard
+            ? "settings.sounds.packDescription"
+            : "settings.sounds.mousePackDescription"
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t("settings.sounds.preview")}
+            title={t("settings.sounds.preview")}
+            disabled={!current}
+            onClick={() => preview(current)}
+          >
+            <Play className="size-3.5" />
+          </Button>
+          <Select
+            value={current ?? ""}
+            items={labels}
+            disabled={!ofKind || ofKind.length === 0}
+            onValueChange={(next) => {
+              if (typeof next !== "string" || !next) return
+              setChosen(next)
+              preview(next)
+            }}
+          >
+            <SelectTrigger size="sm" className="w-56 text-xs">
+              <SelectValue
+                placeholder={
+                  packs
+                    ? t("settings.sounds.noPacks")
+                    : t("settings.sounds.packLoading")
+                }
+              />
+            </SelectTrigger>
+            <SelectContent align="end">
+              {builtIn.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel>{t("settings.sounds.builtIn")}</SelectLabel>
+                  {builtIn.map((pack) => (
+                    <SelectItem
+                      key={pack.id}
+                      value={pack.id}
+                      className="text-xs"
+                    >
+                      {pack.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              )}
+              {imported.length > 0 && (
+                <SelectGroup>
+                  <SelectLabel>{t("settings.sounds.imported")}</SelectLabel>
+                  {imported.map((pack) => (
+                    <SelectItem
+                      key={pack.id}
+                      value={pack.id}
+                      className="text-xs"
+                    >
+                      {pack.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      </Row>
+      <Row
+        title={t("settings.sounds.volume")}
+        description={t(
+          keyboard
+            ? "settings.sounds.volumeDescription"
+            : "settings.sounds.mouseVolumeDescription"
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <input
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            aria-label={t("settings.sounds.volume")}
+            value={Math.round((dragged ?? volume) * 100)}
+            onChange={(event) =>
+              setDragged(Number(event.currentTarget.value) / 100)
+            }
+            onPointerUp={commitVolume}
+            onKeyUp={commitVolume}
+            onBlur={commitVolume}
+            className="w-40 accent-primary"
+          />
+          <span className="w-9 text-right text-xs text-muted-foreground tabular-nums">
+            {Math.round((dragged ?? volume) * 100)}%
+          </span>
+        </div>
       </Row>
     </Card>
   )

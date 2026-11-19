@@ -40,6 +40,14 @@ function bundledPluginsDir(): string {
     : path.join(app.getAppPath(), "dist-plugins")
 }
 
+/** The built-in sound packs: an `extraResources` entry in a packaged app, and
+ * the repository's own `resources/sound-packs/` while developing. */
+function bundledSoundPacksDir(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "sound-packs")
+    : path.join(app.getAppPath(), "resources", "sound-packs")
+}
+
 /** The window an IPC call came from, if it is still there. */
 function ownerOf(caller: unknown): BrowserWindow | null {
   const sender = (caller as IpcMainInvokeEvent | undefined)?.sender
@@ -359,6 +367,7 @@ export function registerIpc(
     macUpdate:
       process.platform === "darwin" && app.isPackaged ? installMacUpdate : null,
     bundledPluginsDir: bundledPluginsDir(),
+    bundledSoundPacksDir: bundledSoundPacksDir(),
     appShare: electronShare,
   }
 

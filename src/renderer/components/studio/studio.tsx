@@ -30,6 +30,7 @@ import { applyLanguage, useT } from "@/lib/i18n"
 import { backgroundStyle, useAppBackground } from "@/lib/app-background"
 import { usePlugins } from "@/lib/plugins/store"
 import { useSettings } from "@/lib/settings"
+import { startTypingSounds } from "@/lib/typing-sounds/engine"
 import { useDock } from "@/lib/dock"
 import { useStudio, type Pane } from "@/lib/store"
 import { useProjects } from "@/lib/projects"
@@ -173,6 +174,9 @@ export function Studio() {
     applyLanguage(useSettings.getState().language)
     return useSettings.subscribe((state) => applyLanguage(state.language))
   }, [])
+
+  // The typing sounds: this window's keys, the pack Settings names.
+  useEffect(() => startTypingSounds(), [])
   const t = useT()
 
   /** The first-launch tour: once the launch screen has gone and the settings
